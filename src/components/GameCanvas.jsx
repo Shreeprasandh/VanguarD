@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { GameAudio } from '../game/audio';
-import { getRandomWordForWave } from '../game/words';
+import { getWordForEnemy } from '../game/words';
 import GameHUD from './GameHUD';
 
 export default function GameCanvas({
@@ -14,6 +14,15 @@ export default function GameCanvas({
   onScoreUpdate
 }) {
   const canvasRef = useRef(null);
+  
+  const isPrime = (num) => {
+    if (num <= 1) return false;
+    for (let i = 2; i <= Math.sqrt(num); i++) {
+      if (num % i === 0) return false;
+    }
+    return true;
+  };
+
   const stateRef = useRef({
     score: 0,
     multiplier: 1,
@@ -181,14 +190,22 @@ export default function GameCanvas({
               GameAudio.play('hit');
 
               if (data.wordFinished) {
-                // Enemy dies
-                state.enemies = state.enemies.filter(e => e.id !== data.wordId);
-                handleEnemyCompletion(data.wordId);
-                createExplosion(data.x, data.y, `var(--neon-${mate.color})`, 25, true);
-                GameAudio.play('explosion');
-                
-                // Update teammate's score locally for drawing
-                mate.score += data.damage;
+                if (targetEnemy.wordQueue && targetEnemy.wordQueue.length > 0) {
+                  const nextWord = targetEnemy.wordQueue.shift();
+                  targetEnemy.word = nextWord;
+                  targetEnemy.targetIndex = 0;
+                  createExplosion(data.x, data.y, `var(--neon-${mate.color})`, 10);
+                  GameAudio.play('explosionSmall');
+                } else {
+                  // Enemy dies
+                  state.enemies = state.enemies.filter(e => e.id !== data.wordId);
+                  handleEnemyCompletion(data.wordId);
+                  createExplosion(data.x, data.y, `var(--neon-${mate.color})`, 25, true);
+                  GameAudio.play('explosion');
+                  
+                  // Update teammate's score locally for drawing
+                  mate.score += data.damage;
+                }
               }
             }
             break;
@@ -467,15 +484,23 @@ export default function GameCanvas({
     if (wordFinished) {
       // Calculate completion score bonus
       scoreGained += enemy.word.length * 5 * state.multiplier;
-      state.activeWordId = null;
       
-      // Explosion effect
-      createExplosion(enemy.x, enemy.y, `var(--neon-${enemy.color})`, 22, true);
-      GameAudio.play('explosion');
-      
-      // Remove enemy from list
-      state.enemies = state.enemies.filter(e => e.id !== enemy.id);
-      handleEnemyCompletion(enemy.id);
+      if (enemy.wordQueue && enemy.wordQueue.length > 0) {
+        const nextWord = enemy.wordQueue.shift();
+        enemy.word = nextWord;
+        enemy.targetIndex = 0;
+        state.activeWordId = null;
+        createExplosion(enemy.x, enemy.y, `var(--neon-${enemy.color})`, 10);
+        GameAudio.play('explosionSmall');
+      } else {
+        state.activeWordId = null;
+        createExplosion(enemy.x, enemy.y, `var(--neon-${enemy.color})`, 22, true);
+        GameAudio.play('explosion');
+        
+        // Remove enemy from list
+        state.enemies = state.enemies.filter(e => e.id !== enemy.id);
+        handleEnemyCompletion(enemy.id);
+      }
     }
 
     state.score += scoreGained;
@@ -571,8 +596,8 @@ export default function GameCanvas({
 
       // Check if all wave enemies spawned and cleared
       if (state.waveSpawnedCount >= state.waveTotalToSpawn && state.enemies.length === 0 && state.bullets.length === 0) {
-        // Trigger Boss Fight on wave 5, 10, 15...
-        if (state.wave % 5 === 0) {
+        // Trigger Boss Fight on every prime wave (2, 3, 5, 7, 11...)
+        if (isPrime(state.wave)) {
           triggerBossWarning();
         } else {
           // Go to next wave
@@ -676,9 +701,18 @@ export default function GameCanvas({
         hp = 2;
       }
 
-      const word = getRandomWordForWave(state.wave);
+      const word = getWordForEnemy(type, state.wave);
       const enemyId = Math.random().toString(36).substring(2, 9);
       
+      let wordQueue = [];
+      if (type === 'cruiser') {
+        // Generals have 2 to 3 words total (so 1 to 2 extra in queue)
+        const totalWords = Math.random() < 0.5 ? 2 : 3;
+        for (let w = 0; w < totalWords - 1; w++) {
+          wordQueue.push(getWordForEnemy('cruiser', state.wave));
+        }
+      }
+
       // Determine spawn column (keep within central 60% of screen)
       const x = canvas.width * 0.25 + Math.random() * (canvas.width * 0.5);
       
@@ -692,6 +726,7 @@ export default function GameCanvas({
       const enemy = {
         id: enemyId,
         word,
+        wordQueue,
         color,
         x,
         y: -30,
@@ -766,26 +801,25 @@ export default function GameCanvas({
 
     // Generate boss sequence words
     // Co-op boss contains cycling colored words
+    const wordCount = 3 + Math.floor(state.wave / 2);
     let bossWords = [];
     if (isMultiplayer && players) {
       const colors = players.map(p => p.color).filter(Boolean);
-      // Spawn 6 words, cycling through active player colors
-      for (let i = 0; i < 6; i++) {
+      for (let i = 0; i < wordCount; i++) {
         const c = colors[i % colors.length];
         bossWords.push({
           id: `boss-w-${i}`,
-          word: getRandomWord(7 + Math.floor(i / 2)),
+          word: getWordForEnemy('boss', state.wave),
           color: c,
           active: i === 0, // Only 1st word active initially
           targetIndex: 0
         });
       }
     } else {
-      // Solo mode: standard 4 shield words
-      for (let i = 0; i < 4; i++) {
+      for (let i = 0; i < wordCount; i++) {
         bossWords.push({
           id: `boss-w-${i}`,
-          word: getRandomWord(6 + i),
+          word: getWordForEnemy('boss', state.wave),
           color: shipColor,
           active: i === 0,
           targetIndex: 0
@@ -892,7 +926,7 @@ export default function GameCanvas({
     const canvas = canvasRef.current;
     if (!canvas || !state.bossObj) return;
 
-    const word = getRandomWord(4);
+    const word = getWordForEnemy('drone', state.wave);
     const id = Math.random().toString(36).substring(2, 9);
     const spawnLeft = Math.random() < 0.5;
     const x = spawnLeft ? state.bossObj.x - 80 : state.bossObj.x + 80;
@@ -1206,7 +1240,7 @@ export default function GameCanvas({
 
       // Label "BOSS"
       ctx.fillStyle = '#ffffff';
-      ctx.font = '700 12px var(--font-display)';
+      ctx.font = '700 12px Orbitron, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('COMMAND DREADNOUGHT', 0, -boss.height / 2 - 35);
 
@@ -1220,32 +1254,40 @@ export default function GameCanvas({
       ctx.shadowBlur = 8;
       ctx.shadowColor = `var(--neon-${enemy.color})`;
       ctx.strokeStyle = `var(--neon-${enemy.color})`;
-      ctx.lineWidth = 2.0;
+      ctx.lineWidth = 2.5; // Thicker lines for visibility
 
-      // Draw procedural enemy design based on class
+      // Draw procedural enemy design based on class - scaled up by 1.6x
       ctx.beginPath();
       if (enemy.type === 'interceptor') {
         // Slick forward sweep design
-        ctx.moveTo(0, 15);
-        ctx.lineTo(12, -8);
-        ctx.lineTo(6, -2);
-        ctx.lineTo(-6, -2);
-        ctx.lineTo(-12, -8);
+        ctx.moveTo(0, 24);
+        ctx.lineTo(20, -12);
+        ctx.lineTo(10, -3);
+        ctx.lineTo(-10, -3);
+        ctx.lineTo(-20, -12);
       } else if (enemy.type === 'cruiser') {
         // Bulky tank shape
-        ctx.moveTo(0, 20);
-        ctx.lineTo(16, 5);
-        ctx.lineTo(12, -15);
-        ctx.lineTo(-12, -15);
-        ctx.lineTo(-16, 5);
+        ctx.moveTo(0, 32);
+        ctx.lineTo(26, 8);
+        ctx.lineTo(20, -24);
+        ctx.lineTo(-20, -24);
+        ctx.lineTo(-26, 8);
       } else {
         // Standard drone (small triangle)
-        ctx.moveTo(0, 10);
-        ctx.lineTo(8, -8);
-        ctx.lineTo(0, -4);
-        ctx.lineTo(-8, -8);
+        ctx.moveTo(0, 16);
+        ctx.lineTo(13, -13);
+        ctx.lineTo(0, -6);
+        ctx.lineTo(-13, -13);
       }
       ctx.closePath();
+      
+      // Translucent solid fill so they are highly visible
+      let fillStyle = 'rgba(255, 255, 255, 0.12)';
+      if (enemy.color === 'red') fillStyle = 'rgba(255, 51, 102, 0.12)';
+      if (enemy.color === 'blue') fillStyle = 'rgba(51, 204, 255, 0.12)';
+      if (enemy.color === 'green') fillStyle = 'rgba(57, 255, 20, 0.12)';
+      ctx.fillStyle = fillStyle;
+      ctx.fill();
       ctx.stroke();
 
       ctx.restore();
@@ -1253,7 +1295,7 @@ export default function GameCanvas({
       // Draw text word label centered above the ship
       ctx.save();
       const isTargeted = state.activeWordId === enemy.id;
-      ctx.font = isTargeted ? '700 15px var(--font-display)' : '400 14px var(--font-body)';
+      ctx.font = isTargeted ? '700 16px Orbitron, sans-serif' : '500 15px Outfit, sans-serif';
       ctx.textAlign = 'center';
 
       const word = enemy.word;
@@ -1282,7 +1324,17 @@ export default function GameCanvas({
           ctx.fillStyle = `var(--neon-${enemy.color})`; // Target color for active letters
         }
         
-        ctx.fillText(char, currentX + ctx.measureText(char).width / 2, enemy.y - 18);
+        const letterPosX = currentX + ctx.measureText(char).width / 2;
+        const letterPosY = enemy.y - 25; // Adjusted higher since ship is 1.6x larger
+        
+        // Draw solid black text outline first for maximum legibility on stars/grids
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 4;
+        ctx.strokeText(char, letterPosX, letterPosY);
+        
+        // Fill letter
+        ctx.fillText(char, letterPosX, letterPosY);
+        
         currentX += ctx.measureText(char).width;
       }
 
@@ -1304,7 +1356,7 @@ export default function GameCanvas({
       ctx.stroke();
       
       ctx.fillStyle = '#ffffff';
-      ctx.font = '700 12px var(--font-display)';
+      ctx.font = '700 13px Orbitron, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(bullet.letter.toUpperCase(), 0, 0);
@@ -1351,7 +1403,7 @@ export default function GameCanvas({
 
       // Draw username under the ship small
       ctx.fillStyle = '#8a8fa3';
-      ctx.font = '400 11px var(--font-body)';
+      ctx.font = '400 11px Outfit, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText(labelText, 0, 30);
 
@@ -1397,11 +1449,11 @@ export default function GameCanvas({
       
       // Flash title
       ctx.fillStyle = '#ffffff';
-      ctx.font = '900 3rem var(--font-display)';
+      ctx.font = '900 3rem Orbitron, sans-serif';
       ctx.fillText(`WAVE ${state.wave}`, canvas.width / 2, canvas.height * 0.46);
 
       ctx.fillStyle = 'var(--neon-blue)';
-      ctx.font = '400 1rem var(--font-body)';
+      ctx.font = '400 1rem Outfit, sans-serif';
       ctx.fillText('INCOMING HOSTILE ATTACKS - PREPARE KEYBOARD', canvas.width / 2, canvas.height * 0.54);
 
       ctx.restore();
@@ -1419,11 +1471,11 @@ export default function GameCanvas({
       ctx.textBaseline = 'middle';
       
       ctx.fillStyle = 'var(--neon-red)';
-      ctx.font = '900 3.2rem var(--font-display)';
+      ctx.font = '900 3.2rem Orbitron, sans-serif';
       ctx.fillText(`WARNING`, canvas.width / 2, canvas.height * 0.45);
       
       ctx.fillStyle = '#ffffff';
-      ctx.font = '600 1.2rem var(--font-body)';
+      ctx.font = '600 1.2rem Outfit, sans-serif';
       ctx.fillText(`BOSS DREADNOUGHT APPROACHING`, canvas.width / 2, canvas.height * 0.55);
 
       ctx.restore();
