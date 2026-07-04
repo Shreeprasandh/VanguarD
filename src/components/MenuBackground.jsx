@@ -41,72 +41,71 @@ export default function MenuBackground() {
 
     // Drifting constellation nodes
     const nodes = [];
-    const nodeCount = 35;
+    const nodeCount = 30;
     for (let i = 0; i < nodeCount; i++) {
       nodes.push({
         x: Math.random() * window.innerWidth,
         y: Math.random() * window.innerHeight,
         size: 0.8 + Math.random() * 1.2,
-        vx: (Math.random() - 0.5) * 0.15,
-        vy: (Math.random() - 0.5) * 0.15,
-        baseAlpha: 0.05 + Math.random() * 0.15,
+        vx: (Math.random() - 0.5) * 0.12,
+        vy: (Math.random() - 0.5) * 0.12,
+        baseAlpha: 0.05 + Math.random() * 0.12,
         alpha: 0,
-        twinkleSpeed: 0.004 + Math.random() * 0.008,
+        twinkleSpeed: 0.003 + Math.random() * 0.007,
         phase: Math.random() * Math.PI * 2
       });
     }
 
     // Static decorative background scenery objects (extremely low opacity 2%-3%)
     const bgObjects = [
-      // 1. Distant Planet Left
+      // 1. Highly Detailed Planet Left
       {
         type: 'planet',
         x: window.innerWidth * 0.15,
         y: window.innerHeight * 0.25,
-        radius: 45,
-        vx: 0.02,
-        vy: -0.01,
-        color: '#4a90e2'
+        radius: 50,
+        vx: 0.015,
+        vy: -0.008
       },
-      // 2. Space Station Platform Right
+      // 2. Space Station (Solar Arrays / Trusses) Right
       {
         type: 'station',
-        x: window.innerWidth * 0.85,
-        y: window.innerHeight * 0.35,
-        size: 80,
+        x: window.innerWidth * 0.82,
+        y: window.innerHeight * 0.3,
+        size: 90,
         vx: -0.01,
         vy: 0.01
       },
-      // 3. Asteroid belt cluster top right
+      // 3. Cratered Asteroid belt cluster top right
       {
         type: 'asteroid',
-        x: window.innerWidth * 0.75,
+        x: window.innerWidth * 0.72,
         y: window.innerHeight * 0.15,
-        radius: 20,
-        offsets: [10, -5, 12, 5, -8, 15, -12, -2],
-        vx: 0.03,
-        vy: 0.02
+        radius: 22,
+        offsets: [8, -4, 10, 3, -6, 12, -9, -1],
+        vx: 0.02,
+        vy: 0.015
       },
-      // 4. Wreckage Debris bottom left
+      // 4. Broken Ship Wreckage bottom left (exposed frames, cables)
       {
         type: 'wreckage',
-        x: window.innerWidth * 0.2,
-        y: window.innerHeight * 0.75,
-        size: 60,
-        vx: -0.02,
-        vy: -0.02
+        x: window.innerWidth * 0.22,
+        y: window.innerHeight * 0.72,
+        size: 70,
+        vx: -0.012,
+        vy: -0.012
       },
-      // 5. Sun with Orbiting Planet
+      // 5. Sun with Orbiting Planets
       {
         type: 'solar',
         x: window.innerWidth * 0.5,
         y: window.innerHeight * 0.8,
-        sunRadius: 15,
-        orbitRadius: 55,
+        sunRadius: 16,
+        orbitRadius: 60,
         orbitAngle: 0,
-        orbitSpeed: 0.001,
-        vx: 0.01,
-        vy: -0.01
+        orbitSpeed: 0.0008,
+        vx: 0.008,
+        vy: -0.008
       }
     ];
 
@@ -137,8 +136,8 @@ export default function MenuBackground() {
 
       const mouse = mouseRef.current;
 
-      // Draw Warped Minimal Grid (1.5% transparency - extremely subtle)
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.012)';
+      // Draw Warped Minimal Grid (1.2% transparency - extremely subtle)
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.009)';
       ctx.lineWidth = 0.8;
       const gridSize = 120;
       
@@ -170,10 +169,10 @@ export default function MenuBackground() {
         obj.y += obj.vy;
 
         // Reset if drifted too far off screen
-        if (obj.x < -100) obj.x = canvas.width + 100;
-        if (obj.x > canvas.width + 100) obj.x = -100;
-        if (obj.y < -100) obj.y = canvas.height + 100;
-        if (obj.y > canvas.height + 100) obj.y = -100;
+        if (obj.x < -150) obj.x = canvas.width + 150;
+        if (obj.x > canvas.width + 150) obj.x = -150;
+        if (obj.y < -150) obj.y = canvas.height + 150;
+        if (obj.y > canvas.height + 150) obj.y = -150;
 
         ctx.save();
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.025)';
@@ -184,21 +183,67 @@ export default function MenuBackground() {
           ctx.beginPath();
           ctx.arc(obj.x, obj.y, obj.radius, 0, Math.PI * 2);
           ctx.stroke();
-          // Diagonal ring
+          
+          // Layered diagonal rings
           ctx.beginPath();
-          ctx.ellipse(obj.x, obj.y, obj.radius * 1.5, obj.radius * 0.3, Math.PI / 6, 0, Math.PI * 2);
+          ctx.ellipse(obj.x, obj.y, obj.radius * 1.6, obj.radius * 0.3, Math.PI / 6, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.ellipse(obj.x, obj.y, obj.radius * 1.45, obj.radius * 0.25, Math.PI / 6, 0, Math.PI * 2);
+          ctx.stroke();
+
+          // Internal Craters (circles with shadow offsets)
+          ctx.beginPath();
+          ctx.arc(obj.x - 15, obj.y - 10, 6, 0, Math.PI * 2);
+          ctx.arc(obj.x + 10, obj.y + 15, 8, 0, Math.PI * 2);
+          ctx.arc(obj.x - 5, obj.y + 20, 4, 0, Math.PI * 2);
+          ctx.stroke();
+          
+          // Planet surface crescent shadow curve
+          ctx.beginPath();
+          ctx.arc(obj.x, obj.y, obj.radius - 2, -Math.PI / 3, Math.PI / 2);
           ctx.stroke();
         } else if (obj.type === 'station') {
-          // Space truss cross lines
+          // Central cylinder module core
           ctx.beginPath();
-          ctx.rect(obj.x - obj.size / 2, obj.y - 4, obj.size, 8);
+          ctx.rect(obj.x - 10, obj.y - obj.size / 3, 20, (obj.size / 3) * 2);
           ctx.stroke();
-          // Crossbeams
+
+          // Horizontal truss beams
           ctx.beginPath();
-          for (let offset = -obj.size / 2; offset <= obj.size / 2; offset += 20) {
-            ctx.moveTo(obj.x + offset, obj.y - 4);
-            ctx.lineTo(obj.x + offset + 10, obj.y + 4);
+          ctx.moveTo(obj.x - obj.size / 2, obj.y);
+          ctx.lineTo(obj.x + obj.size / 2, obj.y);
+          ctx.stroke();
+
+          // Left Wing Solar Array Panels (detailed grid)
+          ctx.beginPath();
+          ctx.rect(obj.x - obj.size / 2, obj.y - 20, 20, 40);
+          ctx.stroke();
+          for (let py = obj.y - 16; py < obj.y + 20; py += 8) {
+            ctx.beginPath();
+            ctx.moveTo(obj.x - obj.size / 2, py);
+            ctx.lineTo(obj.x - obj.size / 2 + 20, py);
+            ctx.stroke();
           }
+
+          // Right Wing Solar Array Panels
+          ctx.beginPath();
+          ctx.rect(obj.x + obj.size / 2 - 20, obj.y - 20, 20, 40);
+          ctx.stroke();
+          for (let py = obj.y - 16; py < obj.y + 20; py += 8) {
+            ctx.beginPath();
+            ctx.moveTo(obj.x + obj.size / 2 - 20, py);
+            ctx.lineTo(obj.x + obj.size / 2, py);
+            ctx.stroke();
+          }
+
+          // Communication dishes
+          ctx.beginPath();
+          ctx.arc(obj.x, obj.y - obj.size / 3 - 6, 6, 0, Math.PI, true);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(obj.x, obj.y - obj.size / 3 - 6);
+          ctx.lineTo(obj.x, obj.y - obj.size / 3 - 14);
           ctx.stroke();
         } else if (obj.type === 'asteroid') {
           // Irregular rock silhouette
@@ -213,37 +258,83 @@ export default function MenuBackground() {
           });
           ctx.closePath();
           ctx.stroke();
+
+          // Surface cracks & internal shading contours
+          ctx.beginPath();
+          ctx.moveTo(obj.x - 8, obj.y - 8);
+          ctx.lineTo(obj.x, obj.y - 2);
+          ctx.lineTo(obj.x + 6, obj.y - 10);
+          ctx.moveTo(obj.x - 12, obj.y + 2);
+          ctx.lineTo(obj.x - 5, obj.y + 6);
+          ctx.stroke();
+          
+          // Internal crater lines
+          ctx.beginPath();
+          ctx.arc(obj.x + 5, obj.y + 4, 3, 0, Math.PI * 2);
+          ctx.stroke();
         } else if (obj.type === 'wreckage') {
-          // Swept vector wing outlines
+          // Swept vector wing outlines (broken frame)
           ctx.beginPath();
           ctx.moveTo(obj.x - obj.size / 2, obj.y - obj.size / 4);
+          ctx.lineTo(obj.x - obj.size / 8, obj.y - obj.size / 4);
+          ctx.moveTo(obj.x + obj.size / 8, obj.y - obj.size / 4);
           ctx.lineTo(obj.x + obj.size / 2, obj.y - obj.size / 4);
-          ctx.lineTo(obj.x, obj.y + obj.size / 4);
+          ctx.lineTo(obj.x + obj.size / 3, obj.y + obj.size / 8);
+          ctx.moveTo(obj.x - obj.size / 3, obj.y + obj.size / 8);
           ctx.closePath();
           ctx.stroke();
-          // Internal crack line
+
+          // Exposed structural ribs (ribbing grid)
           ctx.beginPath();
-          ctx.moveTo(obj.x, obj.y - obj.size / 4);
-          ctx.lineTo(obj.x - 5, obj.y + 5);
+          for (let rx = obj.x - obj.size / 2 + 10; rx < obj.x - 10; rx += 8) {
+            ctx.moveTo(rx, obj.y - obj.size / 4);
+            ctx.lineTo(rx + 2, obj.y - obj.size / 12);
+          }
+          ctx.stroke();
+
+          // Thruster cylindrical engine nozzles
+          ctx.beginPath();
+          ctx.rect(obj.x - 12, obj.y - obj.size / 4 - 8, 8, 8);
+          ctx.rect(obj.x + 4, obj.y - obj.size / 4 - 8, 8, 8);
+          ctx.stroke();
+
+          // Loose bezier cables hanging
+          ctx.beginPath();
+          ctx.moveTo(obj.x - 8, obj.y - obj.size / 4);
+          ctx.bezierCurveTo(obj.x - 12, obj.y, obj.x - 20, obj.y + 5, obj.x - 18, obj.y + 20);
+          ctx.moveTo(obj.x + 8, obj.y - obj.size / 4);
+          ctx.bezierCurveTo(obj.x + 12, obj.y - 5, obj.x + 5, obj.y + 15, obj.x + 10, obj.y + 18);
           ctx.stroke();
         } else if (obj.type === 'solar') {
           // Center sun
           ctx.beginPath();
           ctx.arc(obj.x, obj.y, obj.sunRadius, 0, Math.PI * 2);
           ctx.stroke();
+          // Radiating solar flares
+          for (let f = 0; f < 8; f++) {
+            const angle = (f / 8) * Math.PI * 2;
+            ctx.beginPath();
+            ctx.moveTo(obj.x + Math.cos(angle) * obj.sunRadius, obj.y + Math.sin(angle) * obj.sunRadius);
+            ctx.lineTo(obj.x + Math.cos(angle) * (obj.sunRadius + 4), obj.y + Math.sin(angle) * (obj.sunRadius + 4));
+            ctx.stroke();
+          }
+
           // Orbit line
           ctx.beginPath();
           ctx.arc(obj.x, obj.y, obj.orbitRadius, 0, Math.PI * 2);
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.01)';
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.007)';
           ctx.stroke();
-          // Planet node
+
+          // Orbiting planet node with crater details
           obj.orbitAngle += obj.orbitSpeed;
           const px = obj.x + Math.cos(obj.orbitAngle) * obj.orbitRadius;
           const py = obj.y + Math.sin(obj.orbitAngle) * obj.orbitRadius;
           ctx.beginPath();
-          ctx.arc(px, py, 3, 0, Math.PI * 2);
+          ctx.arc(px, py, 4, 0, Math.PI * 2);
           ctx.fillStyle = 'rgba(255, 255, 255, 0.02)';
           ctx.fill();
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.025)';
+          ctx.stroke();
         }
 
         ctx.restore();

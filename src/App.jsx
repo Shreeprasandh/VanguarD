@@ -37,6 +37,20 @@ export default function App() {
   // Gameplay scoring caches
   const [gameStats, setGameStats] = useState({ score: 0, wave: 1 });
 
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
+
+  useEffect(() => {
+    const checkDevice = () => {
+      const mobileRegex = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i;
+      const userAgentMobile = mobileRegex.test(navigator.userAgent);
+      const touchMobile = navigator.maxTouchPoints > 0 && window.innerWidth <= 1024;
+      setIsMobileDevice(userAgentMobile || touchMobile);
+    };
+    checkDevice();
+    window.addEventListener('resize', checkDevice);
+    return () => window.removeEventListener('resize', checkDevice);
+  }, []);
+
   // Initialize Audio settings on first interaction
   useEffect(() => {
     const triggerAudioInit = () => {
@@ -310,6 +324,44 @@ export default function App() {
 
   return (
     <div className="app-container">
+      {/* Keyboard Requirement Blocker for Phones/Tablets */}
+      {isMobileDevice && (
+        <div 
+          className="modal-overlay" 
+          style={{ 
+            background: '#05050a', 
+            zIndex: 99999, 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            padding: '2rem', 
+            textAlign: 'center' 
+          }}
+        >
+          <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', maxWidth: '440px', padding: '1rem' }}>
+            {/* Red alert corner brackets */}
+            <div style={{ position: 'absolute', top: '-15px', left: '-20px', width: '24px', height: '8px', borderTop: '1px solid var(--neon-red)', borderLeft: '1px solid var(--neon-red)' }} />
+            <div style={{ position: 'absolute', top: '-15px', right: '-20px', width: '24px', height: '8px', borderTop: '1px solid var(--neon-red)', borderRight: '1px solid var(--neon-red)' }} />
+            
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.25rem', color: 'var(--neon-red)', letterSpacing: '4px', textTransform: 'uppercase', marginBottom: '1.5rem' }}>
+              KEYBOARD REQUIRED
+            </div>
+            
+            <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.95rem', lineHeight: '1.7', color: '#dcdfe8', marginBottom: '2.2rem', fontWeight: 300 }}>
+              VanguarD tactical matrices require a physical keyboard connection to synchronize defensive targeting grids. Handheld touch terminals are not supported.
+            </p>
+
+            <div style={{ fontSize: '0.72rem', fontFamily: 'var(--font-display)', color: 'var(--text-secondary)', opacity: 0.5, letterSpacing: '2.5px' }}>
+              CONNECT COMPATIBLE INTERFACE
+            </div>
+
+            <div style={{ position: 'absolute', bottom: '-15px', left: '-20px', width: '24px', height: '8px', borderBottom: '1px solid var(--neon-red)', borderLeft: '1px solid var(--neon-red)' }} />
+            <div style={{ position: 'absolute', bottom: '-15px', right: '-20px', width: '24px', height: '8px', borderBottom: '1px solid var(--neon-red)', borderRight: '1px solid var(--neon-red)' }} />
+          </div>
+        </div>
+      )}
+
       {/* Background canvas visuals for main menu */}
       {screen !== 'playing' && <MenuBackground />}
 

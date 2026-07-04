@@ -1227,11 +1227,16 @@ export default function GameCanvas({
         ctx.closePath();
         ctx.stroke();
         
-        // Internal crater circles for asteroid realism
+        // Internal crater details & surface crack lines
+        ctx.beginPath();
+        ctx.moveTo(-item.size * 0.2, -item.size * 0.1);
+        ctx.lineTo(item.size * 0.1, item.size * 0.2);
+        ctx.stroke();
+        
         if (item.type === 'asteroid') {
           ctx.beginPath();
-          ctx.arc(-item.size * 0.2, -item.size * 0.1, item.size * 0.15, 0, Math.PI * 2);
-          ctx.arc(item.size * 0.2, item.size * 0.2, item.size * 0.1, 0, Math.PI * 2);
+          ctx.arc(-item.size * 0.25, -item.size * 0.25, item.size * 0.12, 0, Math.PI * 2);
+          ctx.arc(item.size * 0.2, item.size * 0.15, item.size * 0.16, 0, Math.PI * 2);
           ctx.stroke();
         }
       } else if (item.type === 'platform') {
@@ -1248,6 +1253,12 @@ export default function GameCanvas({
           ctx.lineTo(sx, item.size * 0.15);
         }
         ctx.stroke();
+        
+        // Solar panels grid on sides
+        ctx.beginPath();
+        ctx.rect(-item.size * 0.6, -item.size * 0.28, item.size * 0.25, item.size * 0.12);
+        ctx.rect(item.size * 0.35, -item.size * 0.28, item.size * 0.25, item.size * 0.12);
+        ctx.stroke();
       } else if (item.type === 'wreckage') {
         // Fractured ship debris silhouette
         ctx.beginPath();
@@ -1257,21 +1268,43 @@ export default function GameCanvas({
         ctx.lineTo(-item.size * 0.4, item.size * 0.3);
         ctx.closePath();
         ctx.stroke();
-        // Exposed ship beams
+        
+        // Exposed ship skeleton ribs & thruster nozzles
         ctx.beginPath();
         ctx.moveTo(-item.size * 0.2, -item.size * 0.25);
         ctx.lineTo(-item.size * 0.1, item.size * 0.32);
         ctx.moveTo(item.size * 0.1, -item.size * 0.2);
         ctx.lineTo(item.size * 0.15, item.size * 0.35);
+        // Engine nozzles
+        ctx.rect(-item.size * 0.3, -item.size * 0.32, item.size * 0.15, item.size * 0.08);
+        ctx.stroke();
+
+        // Loose wires hanging (bezier curves)
+        ctx.beginPath();
+        ctx.moveTo(-item.size * 0.1, item.size * 0.32);
+        ctx.bezierCurveTo(-item.size * 0.2, item.size * 0.45, -item.size * 0.05, item.size * 0.5, -item.size * 0.12, item.size * 0.6);
         ctx.stroke();
       } else if (item.type === 'planet') {
         // Elegant celestial planet outline
         ctx.beginPath();
         ctx.arc(0, 0, item.size * 0.8, 0, Math.PI * 2);
         ctx.stroke();
+        
+        // Surface craters details
+        ctx.beginPath();
+        ctx.arc(-item.size * 0.3, -item.size * 0.2, item.size * 0.1, 0, Math.PI * 2);
+        ctx.arc(item.size * 0.25, item.size * 0.25, item.size * 0.15, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Crescent shadow curvature
+        ctx.beginPath();
+        ctx.arc(0, 0, item.size * 0.77, -Math.PI/3, Math.PI/2);
+        ctx.stroke();
+
         if (item.hasRing) {
           ctx.beginPath();
-          ctx.ellipse(0, 0, item.size * 1.3, item.size * 0.3, Math.PI / 6, 0, Math.PI * 2);
+          ctx.ellipse(0, 0, item.size * 1.35, item.size * 0.32, Math.PI / 6, 0, Math.PI * 2);
+          ctx.ellipse(0, 0, item.size * 1.25, item.size * 0.28, Math.PI / 6, 0, Math.PI * 2);
           ctx.stroke();
         }
       } else if (item.type === 'solarsystem') {
@@ -1279,6 +1312,16 @@ export default function GameCanvas({
         ctx.beginPath();
         ctx.arc(0, 0, item.size * 0.25, 0, Math.PI * 2); // central star
         ctx.stroke();
+        
+        // Solar flares (short lines around star)
+        for (let f = 0; f < 6; f++) {
+          const angle = (f / 6) * Math.PI * 2;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(angle) * item.size * 0.25, Math.sin(angle) * item.size * 0.25);
+          ctx.lineTo(Math.cos(angle) * item.size * 0.32, Math.sin(angle) * item.size * 0.32);
+          ctx.stroke();
+        }
+
         // Orbit ellipse
         ctx.beginPath();
         ctx.ellipse(0, 0, item.size * 0.9, item.size * 0.35, Math.PI / 4, 0, Math.PI * 2);
