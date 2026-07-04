@@ -4,12 +4,14 @@ import { GameAudio } from '../game/audio';
 export default function MainMenu({
   username,
   shipColor,
+  isMobileDevice = false,
   onStartSolo,
   onCreateRoom,
   onJoinRoom,
   onOpenLeaderboard,
   onOpenEditProfile,
-  onOpenStory
+  onOpenStory,
+  onOpenInfo
 }) {
   const [showTeamOptions, setShowTeamOptions] = useState(false);
   const [roomCodeInput, setRoomCodeInput] = useState('');
@@ -190,13 +192,13 @@ export default function MainMenu({
       `}</style>
 
       {/* Decorative Title Block */}
-      <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '4rem' }}>
+      <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: isMobileDevice ? '1.8rem' : '4rem', transition: 'margin-bottom 0.3s ease' }}>
         {/* Sleek top corner lines */}
         <div style={{ position: 'absolute', top: '-15px', left: '-20px', width: '24px', height: '8px', borderTop: '1px solid rgba(255,255,255,0.12)', borderLeft: '1px solid rgba(255,255,255,0.12)' }} />
         <div style={{ position: 'absolute', top: '-15px', right: '-20px', width: '24px', height: '8px', borderTop: '1px solid rgba(255,255,255,0.12)', borderRight: '1px solid rgba(255,255,255,0.12)' }} />
         
-        <h1 className="game-title" style={{ fontSize: '3.6rem', letterSpacing: '14px', margin: '0', padding: '0 0 0 14px', textTransform: 'uppercase', color: '#ffffff' }}>
-          Vanguar<span style={{ color: 'var(--neon-yellow)', textShadow: '0 0 8px rgba(217, 167, 82, 0.35)' }}>D</span>
+        <h1 className="game-title" style={{ fontSize: isMobileDevice ? '2.4rem' : '3.6rem', letterSpacing: isMobileDevice ? '8px' : '14px', margin: '0', padding: isMobileDevice ? '0 0 0 8px' : '0 0 0 14px', textTransform: 'uppercase', color: '#ffffff', transition: 'font-size 0.3s' }}>
+          Vanguar<span style={{ color: 'var(--neon-yellow)', textShadow: '0 0 8px rgba(217, 167, 82, 0.35)' }}>DZ</span>
         </h1>
         <span style={{ fontSize: '0.62rem', fontFamily: 'var(--font-display)', letterSpacing: '6px', color: 'rgba(255, 255, 255, 0.22)', textTransform: 'uppercase', marginTop: '0.8rem' }}>
           Defensive Targeting Matrix
@@ -207,67 +209,64 @@ export default function MainMenu({
         <div style={{ position: 'absolute', bottom: '-15px', right: '-20px', width: '24px', height: '8px', borderBottom: '1px solid rgba(255,255,255,0.12)', borderRight: '1px solid rgba(255,255,255,0.12)' }} />
       </div>
       
-      {/* Dynamic Animated Avatar Profile Trigger */}
-      <div 
-        onClick={() => { handleButtonClick(); onOpenEditProfile(); }}
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          marginBottom: '3.5rem',
-          position: 'relative'
-        }}
-        title="Click to customize profile"
-      >
-        {getShipSvg(shipColor)}
-        <span style={{ 
-          fontFamily: 'var(--font-display)',
-          fontSize: '0.85rem',
-          fontWeight: '500',
-          letterSpacing: '3px',
-          color: 'var(--text-secondary)',
-          marginTop: '1.2rem',
-          textTransform: 'uppercase',
-          transition: 'color 0.2s'
-        }} className="profile-trigger-name">
-          {username}
-        </span>
-      </div>
+      {isMobileDevice ? (
+        /* Mobile/Tablet Block Box instead of buttons */
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div 
+            style={{
+              width: '100%',
+              maxWidth: '430px',
+              padding: '2.5rem 2rem',
+              background: 'rgba(5, 5, 8, 0.95)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: '4px',
+              boxShadow: '0 25px 60px rgba(0, 0, 0, 0.95)',
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              textAlign: 'center',
+              margin: '1.5rem 0'
+            }}
+          >
+            {/* Corner brackets */}
+            <div style={{ position: 'absolute', top: '10px', left: '10px', width: '15px', height: '15px', borderTop: '2px solid rgba(255, 255, 255, 0.25)', borderLeft: '2px solid rgba(255, 255, 255, 0.25)' }} />
+            <div style={{ position: 'absolute', top: '10px', right: '10px', width: '15px', height: '15px', borderTop: '2px solid rgba(255, 255, 255, 0.25)', borderRight: '2px solid rgba(255, 255, 255, 0.25)' }} />
+            <div style={{ position: 'absolute', bottom: '10px', left: '10px', width: '15px', height: '15px', borderBottom: '2px solid rgba(255, 255, 255, 0.25)', borderLeft: '2px solid rgba(255, 255, 255, 0.25)' }} />
+            <div style={{ position: 'absolute', bottom: '10px', right: '10px', width: '15px', height: '15px', borderBottom: '2px solid rgba(255, 255, 255, 0.25)', borderRight: '2px solid rgba(255, 255, 255, 0.25)' }} />
 
-      {/* Main Buttons Block */}
-      {!showTeamOptions ? (
-        <div style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
-          <div className="menu-item-row">
-            {renderPointer('solo')}
-            <button 
-              className="minimal-text-btn"
-              onMouseEnter={() => setHoveredBtn('solo')}
-              onMouseLeave={() => setHoveredBtn(null)}
-              onClick={() => { handleButtonClick(); onStartSolo(); }}
-            >
-              Solo
-            </button>
-          </div>
-          
-          <div className="menu-item-row">
-            {renderPointer('multi')}
-            <button 
-              className="minimal-text-btn"
-              onMouseEnter={() => setHoveredBtn('multi')}
-              onMouseLeave={() => setHoveredBtn(null)}
-              onClick={() => { handleButtonClick(); setShowTeamOptions(true); }}
-            >
-              Multiplayer
-            </button>
+            <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: '0.8rem', fontWeight: 600, color: 'rgba(255, 255, 255, 0.35)', letterSpacing: '3px', textTransform: 'uppercase', marginBottom: '1.2rem' }}>
+              NOTICE
+            </div>
+
+            <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: '0.82rem', lineHeight: '1.6', color: '#a2a6b8', margin: 0, fontWeight: 300 }}>
+              This tactical simulator requires a physical keyboard linkage to align and synchronize defensive targeting grids. Please return using a desktop system or terminal equipped with a hardware keyboard.
+            </p>
           </div>
 
-          <div className="menu-item-row" style={{ marginTop: '0.5rem' }}>
-            {renderPointer('leader')}
+          {/* Centered actions at the bottom of the page */}
+          <div 
+            style={{
+              position: 'fixed',
+              bottom: '2.5rem',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              display: 'flex',
+              gap: '2.5rem',
+              alignItems: 'center',
+              zIndex: 20
+            }}
+          >
             <button 
-              className="minimal-text-btn"
-              style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.35)', letterSpacing: '3px' }}
-              onMouseEnter={() => setHoveredBtn('leader')}
-              onMouseLeave={() => setHoveredBtn(null)}
+              className="leaderboard-link"
+              style={{ margin: 0, opacity: 0.65, fontSize: '0.85rem' }}
+              onClick={() => { handleButtonClick(); onOpenStory(); }}
+            >
+              Story
+            </button>
+            <button 
+              className="leaderboard-link"
+              style={{ margin: 0, opacity: 0.65, fontSize: '0.85rem' }}
               onClick={() => { handleButtonClick(); onOpenLeaderboard(); }}
             >
               Leaderboard
@@ -275,103 +274,175 @@ export default function MainMenu({
           </div>
         </div>
       ) : (
-        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', animation: 'fadeIn 0.3s ease' }}>
-          <div className="menu-item-row">
-            {renderPointer('create')}
-            <button 
-              className="minimal-text-btn"
-              onMouseEnter={() => setHoveredBtn('create')}
-              onMouseLeave={() => setHoveredBtn(null)}
-              onClick={() => { handleButtonClick(); onCreateRoom(); }}
-            >
-              Create Room
-            </button>
+        /* Desktop menu layout */
+        <>
+          {/* Dynamic Animated Avatar Profile Trigger */}
+          <div 
+            onClick={() => { handleButtonClick(); onOpenEditProfile(); }}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              marginBottom: '3.5rem',
+              position: 'relative'
+            }}
+            title="Click to customize profile"
+          >
+            {getShipSvg(shipColor)}
+            <span style={{ 
+              fontFamily: 'var(--font-display)',
+              fontSize: '0.85rem',
+              fontWeight: '500',
+              letterSpacing: '3px',
+              color: 'var(--text-secondary)',
+              marginTop: '1.2rem',
+              textTransform: 'uppercase',
+              transition: 'color 0.2s'
+            }} className="profile-trigger-name">
+              {username}
+            </span>
           </div>
 
-          <form onSubmit={handleJoin} style={{ width: '100%', marginTop: '1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.8rem', textTransform: 'uppercase', fontFamily: 'var(--font-display)', letterSpacing: '2px', opacity: 0.6 }}>
-              Enter Room Code
-            </div>
-            <div style={{ display: 'flex', gap: '0.5rem', width: '100%', maxWidth: '240px', justifyContent: 'center' }}>
-              <input
-                type="text"
-                className="text-input"
-                style={{ 
-                  marginBottom: 0, 
-                  textTransform: 'uppercase', 
-                  fontFamily: 'var(--font-display)', 
-                  letterSpacing: '4px', 
-                  textAlign: 'center', 
-                  fontSize: '1.2rem',
-                  padding: '0.5rem',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  borderRadius: '2px',
-                  background: 'rgba(255,255,255,0.02)'
-                }}
-                placeholder="CODE"
-                maxLength={4}
-                value={roomCodeInput}
-                onChange={(e) => setRoomCodeInput(e.target.value.replace(/[^a-zA-Z]/g, '').substring(0, 4))}
-              />
-              <button 
-                type="submit" 
-                className="btn btn-primary" 
-                style={{ 
-                  width: 'auto', 
-                  marginBottom: 0, 
-                  padding: '0 1.2rem',
-                  borderRadius: '2px',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  fontSize: '0.8rem',
-                  letterSpacing: '1px'
-                }}
-                disabled={roomCodeInput.length !== 4}
-              >
-                Join
-              </button>
-            </div>
-          </form>
+          {/* Main Buttons Block */}
+          {!showTeamOptions ? (
+            <div style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
+              <div className="menu-item-row">
+                {renderPointer('solo')}
+                <button 
+                  className="minimal-text-btn"
+                  onMouseEnter={() => setHoveredBtn('solo')}
+                  onMouseLeave={() => setHoveredBtn(null)}
+                  onClick={() => { handleButtonClick(); onStartSolo(); }}
+                >
+                  Solo
+                </button>
+              </div>
+              
+              <div className="menu-item-row">
+                {renderPointer('multi')}
+                <button 
+                  className="minimal-text-btn"
+                  onMouseEnter={() => setHoveredBtn('multi')}
+                  onMouseLeave={() => setHoveredBtn(null)}
+                  onClick={() => { handleButtonClick(); setShowTeamOptions(true); }}
+                >
+                  Multiplayer
+                </button>
+              </div>
 
-          <div className="menu-item-row" style={{ marginTop: '2.5rem' }}>
-            {renderPointer('back')}
-            <button 
-              className="minimal-text-btn"
-              style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.3)', letterSpacing: '2px' }}
-              onMouseEnter={() => setHoveredBtn('back')}
-              onMouseLeave={() => setHoveredBtn(null)}
-              onClick={() => { handleButtonClick(); setShowTeamOptions(false); }}
-            >
-              Back
-            </button>
-          </div>
-        </div>
+              <div className="menu-item-row" style={{ marginTop: '0.5rem' }}>
+                {renderPointer('leader')}
+                <button 
+                  className="minimal-text-btn"
+                  style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.35)', letterSpacing: '3px' }}
+                  onMouseEnter={() => setHoveredBtn('leader')}
+                  onMouseLeave={() => setHoveredBtn(null)}
+                  onClick={() => { handleButtonClick(); onOpenLeaderboard(); }}
+                >
+                  Leaderboard
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ width: '100%', display: 'flex', flexDirection: 'column', animation: 'fadeIn 0.3s ease' }}>
+              <div className="menu-item-row">
+                {renderPointer('create')}
+                <button 
+                  className="minimal-text-btn"
+                  onMouseEnter={() => setHoveredBtn('create')}
+                  onMouseLeave={() => setHoveredBtn(null)}
+                  onClick={() => { handleButtonClick(); onCreateRoom(); }}
+                >
+                  Create Room
+                </button>
+              </div>
+
+              <form onSubmit={handleJoin} style={{ width: '100%', marginTop: '1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.8rem', textTransform: 'uppercase', fontFamily: 'var(--font-display)', letterSpacing: '2px', opacity: 0.6 }}>
+                  Enter Room Code
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem', width: '100%', maxWidth: '240px', justifyContent: 'center' }}>
+                  <input
+                    type="text"
+                    className="text-input"
+                    style={{ 
+                      marginBottom: 0, 
+                      textTransform: 'uppercase', 
+                      fontFamily: 'var(--font-display)', 
+                      letterSpacing: '4px', 
+                      textAlign: 'center', 
+                      fontSize: '1.2rem',
+                      padding: '0.5rem',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      borderRadius: '2px',
+                      background: 'rgba(255,255,255,0.02)'
+                    }}
+                    placeholder="CODE"
+                    maxLength={4}
+                    value={roomCodeInput}
+                    onChange={(e) => setRoomCodeInput(e.target.value.replace(/[^a-zA-Z]/g, '').substring(0, 4))}
+                  />
+                  <button 
+                    type="submit" 
+                    className="btn btn-primary" 
+                    style={{ 
+                      width: 'auto', 
+                      marginBottom: 0, 
+                      padding: '0 1.2rem',
+                      borderRadius: '2px',
+                      border: '1px solid rgba(255,255,255,0.2)',
+                      fontSize: '0.8rem',
+                      letterSpacing: '1px'
+                    }}
+                    disabled={roomCodeInput.length !== 4}
+                  >
+                    Join
+                  </button>
+                </div>
+              </form>
+
+              <div className="menu-item-row" style={{ marginTop: '2.5rem' }}>
+                {renderPointer('back')}
+                <button 
+                  className="minimal-text-btn"
+                  style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.3)', letterSpacing: '2px' }}
+                  onMouseEnter={() => setHoveredBtn('back')}
+                  onMouseLeave={() => setHoveredBtn(null)}
+                  onClick={() => { handleButtonClick(); setShowTeamOptions(false); }}
+                >
+                  Back
+                </button>
+              </div>
+            </div>
+          )}
+          
+          {/* Story Link on Bottom Left (fixed position for desktop) */}
+          <button 
+            className="leaderboard-link"
+            style={{
+              position: 'fixed',
+              bottom: '1.5rem',
+              left: '1.5rem',
+              marginTop: 0,
+              opacity: 0.35,
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-secondary)',
+              fontFamily: 'var(--font-display)',
+              fontSize: '0.8rem',
+              letterSpacing: '2px',
+              textTransform: 'uppercase',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              outline: 'none',
+              zIndex: 20
+            }}
+            onClick={() => { handleButtonClick(); onOpenStory(); }}
+          >
+            Story
+          </button>
+        </>
       )}
-      
-      {/* Story Link on Bottom Left (fixed position) */}
-      <button 
-        className="leaderboard-link"
-        style={{
-          position: 'fixed',
-          bottom: '1.5rem',
-          left: '1.5rem',
-          marginTop: 0,
-          opacity: 0.35,
-          background: 'transparent',
-          border: 'none',
-          color: 'var(--text-secondary)',
-          fontFamily: 'var(--font-display)',
-          fontSize: '0.8rem',
-          letterSpacing: '2px',
-          textTransform: 'uppercase',
-          cursor: 'pointer',
-          transition: 'all 0.2s',
-          outline: 'none',
-          zIndex: 20
-        }}
-        onClick={() => { handleButtonClick(); onOpenStory(); }}
-      >
-        Story
-      </button>
     </div>
   );
 }

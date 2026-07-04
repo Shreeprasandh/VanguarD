@@ -105,6 +105,22 @@ export default function Lobby({ roomCode, players, localPlayerId, onSelectColor,
           position: relative;
         }
 
+        @media (max-width: 480px) {
+          .lobby-grid-columns {
+            grid-template-columns: 1fr !important;
+            gap: 1rem !important;
+            margin: 1.5rem 0 !important;
+          }
+          .hologram-slot {
+            border-left: none !important;
+            border-bottom: 1px dashed rgba(255, 255, 255, 0.08) !important;
+            padding: 1.2rem 1rem !important;
+          }
+          .hologram-slot:last-of-type {
+            border-bottom: none !important;
+          }
+        }
+
         .hologram-slot {
           display: flex;
           flex-direction: column;
@@ -339,7 +355,7 @@ export default function Lobby({ roomCode, players, localPlayerId, onSelectColor,
             </button>
             {!isLobbyFull && (
               <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-body)', opacity: 0.5 }}>
-                VanguarD Co-op matrices require exactly 3 linked fighters.
+                VanguarDZ Co-op matrices require exactly 3 linked fighters.
               </p>
             )}
           </>

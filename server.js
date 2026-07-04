@@ -79,7 +79,9 @@ function getRoomPlayersData(roomId) {
       position: p.position,
       isHost: p.isHost,
       score: globalPlayer ? globalPlayer.score : 0,
-      level: globalPlayer ? globalPlayer.level : 1
+      level: globalPlayer ? globalPlayer.level : 1,
+      skills: p.skills || [],
+      dockReady: !!p.dockReady
     };
   });
 }
@@ -269,6 +271,53 @@ wss.on('connection', (ws) => {
           sendToRoom(code, {
             type: 'ROOM_PLAYERS_UPDATE',
             players: getRoomPlayersData(code)
+          });
+          break;
+        }
+
+        case 'DOCK_PLAYER_UPDATE': {
+          const code = player.roomId;
+          const room = rooms.get(code);
+          if (!room) break;
+
+          const roomPlayer = room.players.find(p => p.socketId === socketId);
+          if (roomPlayer) {
+            roomPlayer.color = data.color || roomPlayer.color;
+            roomPlayer.skills = data.skills || roomPlayer.skills;
+            roomPlayer.dockReady = data.ready !== undefined ? data.ready : false;
+          }
+
+          sendToRoom(code, {
+            type: 'ROOM_PLAYERS_UPDATE',
+            players: getRoomPlayersData(code)
+          });
+          break;
+        }
+
+        case 'LAUNCH_NEXT_WAVE': {
+          const code = player.roomId;
+          const room = rooms.get(code);
+          if (!room || room.hostId !== socketId) break;
+
+          // Reset docking readiness for all players for next cycles
+          room.players.forEach(p => {
+            p.dockReady = false;
+          });
+
+          sendToRoom(code, {
+            type: 'LAUNCH_NEXT_WAVE'
+          });
+          break;
+        }
+
+        case 'CAST_SKILL': {
+          const code = player.roomId;
+          if (!code) break;
+          sendToRoom(code, {
+            type: 'CAST_SKILL',
+            socketId: socketId,
+            skillId: data.skillId,
+            slot: data.slot
           });
           break;
         }

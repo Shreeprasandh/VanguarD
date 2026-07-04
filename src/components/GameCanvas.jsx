@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { GameAudio } from '../game/audio';
 import { getWordForEnemy } from '../game/words';
 import GameHUD from './GameHUD';
+import { SKILLS_DB } from './SkillsData';
 
 export default function GameCanvas({
   username,
@@ -14,7 +15,11 @@ export default function GameCanvas({
   onScoreUpdate,
   muted,
   onToggleMute,
-  onQuitToMenu
+  onQuitToMenu,
+  equippedSkills,
+  initialWave,
+  initialScore,
+  onDockStart
 }) {
   const getColorHex = (colorName) => {
     if (colorName === 'red') return '#cf4042'; // Muted Crimson
@@ -62,7 +67,22 @@ export default function GameCanvas({
     waveTotalToSpawn: 10,
     isLocalGameOver: false,
     teammates: [],
-    isPaused: false
+    isPaused: false,
+    charge: 0,
+    cooldowns: [0, 0, 0],
+    empFreezeTime: 0,
+    nebulaSlowTime: 0,
+    overclockTime: 0,
+    decoyTime: 0,
+    shieldActive: false,
+    stabilizerTime: 0,
+    overdriveTime: 0,
+    usedWords: new Set(),
+    bossShieldActive: false,
+    bossShieldTime: 0,
+    bossShieldHealth: 0,
+    bossShieldsCount: 0,
+    shieldClaims: []
   });
 
   const [hudState, setHudState] = useState({
@@ -72,6 +92,32 @@ export default function GameCanvas({
     health: 100,
     teammates: []
   });
+
+  // Load initial wave and score on mount (for persistent wave progression)
+  useEffect(() => {
+    const waveVal = initialWave || 1;
+    const scoreVal = initialScore || 0;
+    
+    stateRef.current.wave = waveVal;
+    stateRef.current.score = scoreVal;
+    stateRef.current.waveTotalToSpawn = 10 + waveVal * 4;
+    
+    if (waveVal === 1) {
+      stateRef.current.usedWords.clear();
+    }
+    
+    stateRef.current.targetNebulaColor = {
+      h: (260 + waveVal * 30) % 360,
+      s: 60,
+      l: 8 + (waveVal % 4)
+    };
+
+    setHudState(prev => ({
+      ...prev,
+      wave: waveVal,
+      score: scoreVal
+    }));
+  }, [initialWave, initialScore]);
 
   // Track keydown handler to remove on unmount
   useEffect(() => {
@@ -279,6 +325,21 @@ export default function GameCanvas({
             break;
           }
 
+          case 'CAST_SKILL': {
+            if (data.socketId !== socket.id) {
+              const mate = players.find(p => p.socketId === data.socketId);
+              if (mate) {
+                const mx = getShipX(mate.position, window.innerWidth);
+                const my = window.innerHeight - 80;
+                const skill = SKILLS_DB.find(s => s.id === data.skillId);
+                const resolvedColor = skill ? skill.color : '#ffffff';
+                createExplosion(mx, my, resolvedColor, 20);
+                GameAudio.play('laserPlayer');
+              }
+            }
+            break;
+          }
+
           case 'GAME_OVER': {
             triggerGameOver(data.finalScore, data.waveReached);
             break;
@@ -373,6 +434,271 @@ export default function GameCanvas({
     stateRef.current.scenery = scenery;
   };
 
+  const handleEnemyKill = (enemy) => {
+    const state = stateRef.current;
+    let scoreGained = 10 * state.multiplier + (enemy.word ? enemy.word.length * 5 * state.multiplier : 0);
+    
+    state.activeWordId = null;
+    createExplosion(enemy.x, enemy.y, getColorHex(enemy.color), 22, true);
+    GameAudio.play('explosion');
+    
+    // Remove enemy from list
+    state.enemies = state.enemies.filter(e => e.id !== enemy.id);
+    handleEnemyCompletion(enemy.id);
+
+    state.score += scoreGained;
+    stateRef.current.score = state.score;
+    setHudState(prev => ({ ...prev, score: state.score }));
+    onScoreUpdate(state.score, state.wave);
+
+    if (isMultiplayer && socket) {
+      socket.send(JSON.stringify({
+        type: 'TYPING_STRIKE',
+        wordId: enemy.id,
+        charIndex: enemy.word ? enemy.word.length : 1,
+        damage: scoreGained,
+        x: enemy.x,
+        y: enemy.y,
+        wordFinished: true
+      }));
+    }
+  };
+
+  const triggerSkill = (slotIdx) => {
+    const state = stateRef.current;
+    if (state.isLocalGameOver || state.isPaused) return;
+    if (!equippedSkills || !equippedSkills[slotIdx]) return;
+
+    const skillId = equippedSkills[slotIdx];
+    const skill = SKILLS_DB.find(s => s.id === skillId);
+    if (!skill) return;
+
+    // Check if we have enough charge and if it is off cooldown
+    if (state.charge < skill.cost) return;
+    if (state.cooldowns[slotIdx] > 0) return;
+
+    // Cast skill
+    state.charge -= skill.cost;
+    state.cooldowns[slotIdx] = skill.cooldown;
+    setCharge(state.charge);
+    setCooldowns([...state.cooldowns]);
+    GameAudio.play('laserPlayer'); // Play generic activation sound
+
+    // Trigger specific skill powers
+    switch (skillId) {
+      case 'emp_discharge':
+        // Freeze active enemies based on rank
+        state.enemies.forEach(e => {
+          let duration = 4000;
+          if (e.type === 'interceptor') duration = 3000;
+          else if (e.type === 'cruiser') duration = 2000;
+          else if (e.type === 'boss') duration = 1000;
+          e.freezeTime = duration;
+        });
+        // Create full screen EMP shockwave burst
+        createExplosion(canvasRef.current.width / 2, canvasRef.current.height / 2, skill.color, 45, true);
+        break;
+
+      case 'overclock':
+        state.overclockTime = 5000;
+        break;
+
+      case 'decoy_probe':
+        state.decoyTime = 6000;
+        break;
+
+      case 'nebula_veil':
+        state.enemies.forEach(e => {
+          let multiplier = 0.5; // Drone: 50% slow
+          if (e.type === 'interceptor') multiplier = 0.625; // 37.5% slow
+          else if (e.type === 'cruiser') multiplier = 0.75; // 25% slow
+          else if (e.type === 'boss') multiplier = 0.875; // 12.5% slow
+          e.slowMultiplier = multiplier;
+          e.slowTime = 6000;
+        });
+        break;
+
+      case 'tactical_shield':
+        state.shieldActive = true;
+        break;
+
+      case 'laser_sweep':
+        // Strip first letter of all active words
+        state.enemies.forEach(e => {
+          if (e.word && e.word.length > 0) {
+            e.word = e.word.substring(1);
+            if (state.activeWordId === e.id) {
+              e.typedIndex = Math.max(0, e.typedIndex - 1);
+            }
+          }
+        });
+        // Spark a glowing swipe laser line across screen center
+        createExplosion(canvasRef.current.width / 2, canvasRef.current.height * 0.4, skill.color, 25);
+        break;
+
+      case 'quantum_warp':
+        // Wipe all bullets on screen
+        state.bullets = [];
+        createExplosion(canvasRef.current.width / 2, canvasRef.current.height - 80, skill.color, 35, true);
+        break;
+
+      case 'chronos_drive':
+        state.chronosDriveTime = 8000;
+        break;
+
+      case 'auto_scribe': {
+        // Find targeted enemy
+        const target = state.enemies.find(e => e.id === state.activeWordId);
+        if (target && target.word) {
+          let lettersCount = 8;
+          if (target.type === 'interceptor') lettersCount = 6;
+          else if (target.type === 'cruiser') lettersCount = 4;
+          else if (target.type === 'boss') lettersCount = 2;
+
+          const toType = Math.min(lettersCount, target.word.length);
+          target.word = target.word.substring(toType);
+          
+          if (target.word.length === 0) {
+            handleEnemyKill(target);
+          } else {
+            createExplosion(target.x, target.y, skill.color, 8);
+          }
+        }
+        break;
+      }
+
+      case 'multiplier_surge':
+        state.multiplier = Math.min(10, state.multiplier * 2);
+        setHudState(prev => ({ ...prev, multiplier: state.multiplier }));
+        break;
+
+      case 'nano_repair':
+        state.health = Math.min(100, state.health + 15);
+        setHudState(prev => ({ ...prev, health: state.health }));
+        break;
+
+      case 'singularity_pin': {
+        // Find highest enemy
+        let highest = null;
+        state.enemies.forEach(e => {
+          if (!highest || e.y > highest.y) {
+            highest = e;
+          }
+        });
+        if (highest) {
+          highest.anchoredTime = 8000;
+          createExplosion(highest.x, highest.y, skill.color, 15);
+        }
+        break;
+      }
+
+      case 'data_purge': {
+        // Destroy lowest health non-boss enemy
+        let target = null;
+        state.enemies.forEach(e => {
+          if (e.type !== 'boss') {
+            if (!target || e.word.length < target.word.length) {
+              target = e;
+            }
+          }
+        });
+        if (target) {
+          target.word = '';
+          handleEnemyKill(target);
+        }
+        break;
+      }
+
+      case 'reflector_shield':
+        state.reflectorTime = 5000;
+        break;
+
+      case 'chain_strike': {
+        // Pick 3 random enemies
+        const shuffed = [...state.enemies].sort(() => 0.5 - Math.random()).slice(0, 3);
+        shuffed.forEach(e => {
+          if (e.word && e.word.length > 0) {
+            const toType = Math.min(2, e.word.length);
+            e.word = e.word.substring(toType);
+            if (e.word.length === 0) {
+              handleEnemyKill(e);
+            } else {
+              createExplosion(e.x, e.y, skill.color, 6);
+            }
+          }
+        });
+        break;
+      }
+
+      case 'shatter_code': {
+        // If boss exists, type 25% of its shield word
+        if (state.waveState === 'boss_fight' && state.bossObj) {
+          const boss = state.bossObj;
+          const activeShield = boss.words.find(w => w.active && !w.completed);
+          if (activeShield && activeShield.word) {
+            const count = Math.ceil(activeShield.word.length * 0.25);
+            activeShield.word = activeShield.word.substring(count);
+            if (activeShield.word.length === 0) {
+              activeShield.completed = true;
+              checkBossShieldsCompleted(activeShield.id);
+            } else {
+              createExplosion(boss.x, boss.y, skill.color, 12);
+            }
+          }
+        }
+        break;
+      }
+
+      case 'combo_stabilizer':
+        state.stabilizerTime = 8000;
+        break;
+
+      case 'overdrive_thruster':
+        state.overdriveTime = 6000;
+        break;
+
+      case 'hologram_decoy':
+        state.hologramTime = 6000;
+        break;
+
+      case 'gravity_rewind':
+        state.enemies.forEach(e => {
+          e.y = Math.max(50, e.y - 150);
+        });
+        createExplosion(canvasRef.current.width / 2, canvasRef.current.height * 0.3, skill.color, 30);
+        break;
+    }
+
+    // Broadcast skill use in co-op
+    if (isMultiplayer && socket) {
+      socket.send(JSON.stringify({
+        type: 'CAST_SKILL',
+        skillId: skillId,
+        slot: slotIdx
+      }));
+    }
+  };
+
+  const handleWaveEndDetection = () => {
+    const state = stateRef.current;
+    if (state.wave % 5 === 0) {
+      state.waveState = 'docking';
+      state.dockingTimer = 180;
+      state.dockingShipYOffset = 0;
+      state.hasPuffedSteam = false;
+      GameAudio.play('emp');
+      
+      if (isMultiplayer && socket) {
+        socket.send(JSON.stringify({
+          type: 'INIT_DOCK',
+          wave: state.wave
+        }));
+      }
+    } else {
+      advanceNextWave();
+    }
+  };
+
   // Helper to determine Ship center X coordinate based on lobby index
   const getShipX = (position, screenWidth) => {
     if (position === 'left') return screenWidth * 0.25;
@@ -405,7 +731,29 @@ export default function GameCanvas({
     const state = stateRef.current;
     if (state.isLocalGameOver || state.isPaused) return;
 
-    const key = e.key;
+    const key = e.key.toLowerCase();
+    if (key === 'x' || key === 'z' || key === 's') {
+      const slotIdx = key === 'x' ? 0 : key === 'z' ? 1 : 2;
+      triggerSkill(slotIdx);
+      return;
+    }
+
+    if (key === 'a') {
+      if (state.bossShieldsCount > 0 && state.bossShieldTime <= 0) {
+        state.bossShieldsCount -= 1;
+        setBossShields(state.bossShieldsCount);
+        state.bossShieldActive = true;
+        state.bossShieldTime = 8000;
+        state.bossShieldHealth = 3;
+        GameAudio.play('shield_activate');
+        // Spark a glowing blue burst at ship position
+        const shipX = window.innerWidth / 2;
+        const shipY = window.innerHeight - 80;
+        createExplosion(shipX, shipY, '#38bdf8', 25, true);
+      }
+      return;
+    }
+
     if (key.length !== 1) return; // Ignore modifier keys (Shift, Ctrl, etc.)
 
     const char = key.toLowerCase();
@@ -448,12 +796,25 @@ export default function GameCanvas({
       if (enemy) {
         const nextChar = enemy.word[enemy.targetIndex].toLowerCase();
         if (char === nextChar) {
+          // If Overclock is active, hit 2 letters!
           hitTarget(enemy);
+          if (state.overclockTime > 0 && enemy.targetIndex < enemy.word.length) {
+            // Hit second letter
+            hitTarget(enemy);
+          }
         } else {
-          // Miss resets streak & multiplier
-          state.streak = 0;
-          state.multiplier = 1;
-          setHudState(prev => ({ ...prev, multiplier: 1 }));
+          enemy.typos = (enemy.typos || 0) + 1;
+          if (state.shieldActive) {
+            state.shieldActive = false; // absorb mistake
+            createExplosion(enemy.x, enemy.y, '#a3e635', 10);
+          } else {
+            // Miss resets streak & multiplier if stabilizer is not running
+            if (state.stabilizerTime <= 0) {
+              state.streak = 0;
+              state.multiplier = 1;
+              setHudState(prev => ({ ...prev, multiplier: 1 }));
+            }
+          }
         }
       } else {
         // Targeted enemy was destroyed by teammate or went offscreen
@@ -477,14 +838,31 @@ export default function GameCanvas({
       return matchesColor && startsWithChar && e.targetIndex === 0;
     });
 
-    if (eligibleEnemies.length === 0) return;
+    if (eligibleEnemies.length === 0) {
+      // General typo outside active target
+      if (state.shieldActive) {
+        state.shieldActive = false;
+      } else {
+        if (state.stabilizerTime <= 0) {
+          state.streak = 0;
+          state.multiplier = 1;
+          setHudState(prev => ({ ...prev, multiplier: 1 }));
+        }
+      }
+      return;
+    }
 
     // Pick the enemy closest to the bottom
     eligibleEnemies.sort((a, b) => b.y - a.y);
     const target = eligibleEnemies[0];
     state.activeWordId = target.id;
     GameAudio.play('target');
+    
+    // Hit first character
     hitTarget(target);
+    if (state.overclockTime > 0 && target.targetIndex < target.word.length) {
+      hitTarget(target);
+    }
   };
 
   const hitTarget = (enemy) => {
@@ -552,6 +930,17 @@ export default function GameCanvas({
         createExplosion(enemy.x, enemy.y, getColorHex(enemy.color), 22, true);
         GameAudio.play('explosion');
         
+        // Build charge slowly if no typos were made
+        if (!enemy.typos || enemy.typos === 0) {
+          let chargeGain = 5;
+          if (enemy.type === 'interceptor') chargeGain = 10;
+          else if (enemy.type === 'cruiser') chargeGain = 15;
+          else if (enemy.type === 'boss') chargeGain = 25;
+
+          state.charge = Math.min(100, state.charge + chargeGain);
+          setCharge(state.charge);
+        }
+
         // Remove enemy from list
         state.enemies = state.enemies.filter(e => e.id !== enemy.id);
         handleEnemyCompletion(enemy.id);
@@ -588,6 +977,90 @@ export default function GameCanvas({
     const state = stateRef.current;
     const canvas = canvasRef.current;
     if (!canvas || state.isLocalGameOver) return;
+
+    if (state.isPaused) return;
+
+    // Decrement skill status clocks
+    state.empFreezeTime = Math.max(0, state.empFreezeTime - 16.7);
+    state.nebulaSlowTime = Math.max(0, state.nebulaSlowTime - 16.7);
+    state.overclockTime = Math.max(0, state.overclockTime - 16.7);
+    state.decoyTime = Math.max(0, state.decoyTime - 16.7);
+    state.stabilizerTime = Math.max(0, state.stabilizerTime - 16.7);
+    state.overdriveTime = Math.max(0, state.overdriveTime - 16.7);
+    state.reflectorTime = Math.max(0, state.reflectorTime - 16.7);
+    state.hologramTime = Math.max(0, state.hologramTime - 16.7);
+    state.bossShieldTime = Math.max(0, state.bossShieldTime - 16.7);
+
+    // Update shield claim animations
+    if (state.shieldClaims && state.shieldClaims.length > 0) {
+      const targetX = window.innerWidth / 2;
+      const targetY = window.innerHeight - 80;
+      for (let i = state.shieldClaims.length - 1; i >= 0; i--) {
+        const orb = state.shieldClaims[i];
+        orb.progress += 0.015; // smooth travel LERP rate (approx 1.1 seconds)
+        if (orb.progress >= 1.0) {
+          state.shieldClaims.splice(i, 1);
+          // Play plasma chime confirmation sound
+          GameAudio.play('plasma'); 
+          // Spark glowing blue impact ring at ship
+          createExplosion(targetX, targetY, '#38bdf8', 12, false);
+          // Cap maximum stored shields to 3, ignore additional claims
+          state.bossShieldsCount = Math.min(3, (state.bossShieldsCount || 0) + 1);
+          setBossShields(state.bossShieldsCount);
+        }
+      }
+    }
+
+    // Cooldown ticks (approx 1s accumulation)
+    state.cooldownAccumulator = (state.cooldownAccumulator || 0) + 16.7;
+    if (state.cooldownAccumulator >= 1000) {
+      state.cooldownAccumulator -= 1000;
+      let changed = false;
+      state.cooldowns = state.cooldowns.map(c => {
+        if (c > 0) {
+          changed = true;
+          return c - 1;
+        }
+        return 0;
+      });
+      if (changed) {
+        setCooldowns([...state.cooldowns]);
+      }
+
+      // Sync status clocks to React state once a second
+      setStatusClocks({
+        overclock: Math.ceil(state.overclockTime / 1000),
+        decoy: Math.ceil(state.decoyTime / 1000),
+        nebula: Math.ceil(state.nebulaSlowTime / 1000),
+        stabilizer: Math.ceil(state.stabilizerTime / 1000),
+        overdrive: Math.ceil(state.overdriveTime / 1000),
+        reflector: Math.ceil(state.reflectorTime / 1000),
+        hologram: Math.ceil(state.hologramTime / 1000)
+      });
+      setBossShieldActiveTime(Math.ceil(state.bossShieldTime / 1000));
+    }
+
+    // Docking sequence animation ticker
+    if (state.waveState === 'docking') {
+      state.dockingTimer -= 1;
+      state.dockingShipYOffset = Math.min(220, (state.dockingShipYOffset || 0) + 1.25);
+      
+      // Gradually decelerate parallax scrolling background stars
+      state.scenery.forEach(item => {
+        const factor = Math.max(0, state.dockingTimer / 180);
+        item.y += item.speedMultiplier * (1 + state.wave * 0.08) * factor;
+        item.rotation += item.rotationSpeed * factor;
+      });
+
+      if (state.dockingTimer <= 0) {
+        // Reset timers and launch parent docked UI selection
+        state.waveState = 'intro';
+        state.dockingShipYOffset = 0;
+        state.hasPuffedSteam = false;
+        onDockStart(state.wave);
+      }
+      return;
+    }
 
     // Shift background nebula colors smoothly
     state.nebulaColor.h += (state.targetNebulaColor.h - state.nebulaColor.h) * 0.01;
@@ -656,8 +1129,8 @@ export default function GameCanvas({
         if (isPrime(state.wave)) {
           triggerBossWarning();
         } else {
-          // Go to next wave
-          advanceNextWave();
+          // Go to next wave or docking station
+          handleWaveEndDetection();
         }
       }
     }
@@ -684,11 +1157,23 @@ export default function GameCanvas({
     const multiplayerDifficulty = isMultiplayer ? 1.25 : 1.0; // 25% harder as requested
     
     state.enemies.forEach(enemy => {
-      enemy.y += enemy.speed * baseSpeedMultiplier * multiplayerDifficulty;
+      // Decrement status timers
+      if (enemy.freezeTime > 0) enemy.freezeTime -= 16.7;
+      if (enemy.slowTime > 0) enemy.slowTime -= 16.7;
+      if (enemy.anchoredTime > 0) enemy.anchoredTime -= 16.7;
+
+      let speedFactor = 1.0;
+      if (enemy.freezeTime > 0 || enemy.anchoredTime > 0) {
+        speedFactor = 0;
+      } else if (enemy.slowTime > 0) {
+        speedFactor = enemy.slowMultiplier || 0.5;
+      }
+
+      enemy.y += enemy.speed * baseSpeedMultiplier * multiplayerDifficulty * speedFactor;
       
       // Elite/interceptor weaving logic
-      if (enemy.type === 'interceptor') {
-        enemy.x += Math.sin(enemy.y * 0.02) * 2;
+      if (enemy.type === 'interceptor' && speedFactor > 0) {
+        enemy.x += Math.sin(enemy.y * 0.02) * 2 * speedFactor;
       }
 
       // Cruiser shooting bullets logic
@@ -714,16 +1199,34 @@ export default function GameCanvas({
       }
     });
 
-    // Bullets movement
     state.bullets.forEach(bullet => {
-      bullet.y += bullet.speed * baseSpeedMultiplier * multiplayerDifficulty;
+      let bulletFactor = 1.0;
+      if (state.chronosDriveTime > 0) {
+        bulletFactor = 0.3;
+      }
+      bullet.y += bullet.speed * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor;
 
       // Hit bottom check
       const thresholdY = canvas.height - 100;
       if (bullet.y >= thresholdY) {
-        // Bullet hit a ship -> Instant Game Over as requested
-        takeDamage(100); // Triggers death instantly
-        state.bullets = state.bullets.filter(b => b.id !== bullet.id);
+        if (state.reflectorTime > 0) {
+          // Reflect back to destroy the closest enemy
+          if (state.enemies.length > 0) {
+            const closest = [...state.enemies].sort((a, b) => b.y - a.y)[0];
+            closest.word = '';
+            handleEnemyKill(closest);
+          }
+          state.bullets = state.bullets.filter(b => b.id !== bullet.id);
+        } else if (state.shieldActive) {
+          // Tactical shield absorbs the hit
+          state.shieldActive = false;
+          createExplosion(bullet.x, bullet.y, '#a3e635', 15, true);
+          state.bullets = state.bullets.filter(b => b.id !== bullet.id);
+        } else {
+          // Bullet hit a ship -> Instant Game Over as requested
+          takeDamage(100); // Triggers death instantly
+          state.bullets = state.bullets.filter(b => b.id !== bullet.id);
+        }
       }
     });
   };
@@ -762,7 +1265,7 @@ export default function GameCanvas({
         speed = 2.5 + Math.random() * 1.5;
       }
 
-      const word = getWordForEnemy(type, state.wave);
+      const word = getWordForEnemy(type, state.wave, state.usedWords);
       const enemyId = Math.random().toString(36).substring(2, 9);
       
       let wordQueue = [];
@@ -770,7 +1273,7 @@ export default function GameCanvas({
         // Generals have 2 to 3 words total (so 1 to 2 extra in queue)
         const totalWords = Math.random() < 0.5 ? 2 : 3;
         for (let w = 0; w < totalWords - 1; w++) {
-          wordQueue.push(getWordForEnemy('cruiser', state.wave));
+          wordQueue.push(getWordForEnemy('cruiser', state.wave, state.usedWords));
         }
       }
 
@@ -878,7 +1381,7 @@ export default function GameCanvas({
         const c = colors[i % colors.length];
         bossWords.push({
           id: `boss-w-${i}`,
-          word: getWordForEnemy('boss', state.wave),
+          word: getWordForEnemy('boss', state.wave, state.usedWords),
           color: c,
           active: i === 0, // Only 1st word active initially
           targetIndex: 0
@@ -888,7 +1391,7 @@ export default function GameCanvas({
       for (let i = 0; i < wordCount; i++) {
         bossWords.push({
           id: `boss-w-${i}`,
-          word: getWordForEnemy('boss', state.wave),
+          word: getWordForEnemy('boss', state.wave, state.usedWords),
           color: shipColor,
           active: i === 0,
           targetIndex: 0
@@ -961,7 +1464,11 @@ export default function GameCanvas({
       ? players[Math.floor(Math.random() * players.length)].position
       : 'center';
     
-    const destX = getShipX(targetPos, window.innerWidth);
+    let destX = getShipX(targetPos, window.innerWidth);
+    if (state.decoyTime > 0) {
+      // Divert bullets to the left edge of screen
+      destX = window.innerWidth * 0.1;
+    }
 
     // Calculate bullet velocities to shoot towards ship
     const startX = state.bossObj.x;
@@ -995,7 +1502,7 @@ export default function GameCanvas({
     const canvas = canvasRef.current;
     if (!canvas || !state.bossObj) return;
 
-    const word = getWordForEnemy('drone', state.wave);
+    const word = getWordForEnemy('drone', state.wave, state.usedWords);
     const id = Math.random().toString(36).substring(2, 9);
     const spawnLeft = Math.random() < 0.5;
     const x = spawnLeft ? state.bossObj.x - 80 : state.bossObj.x + 80;
@@ -1031,6 +1538,22 @@ export default function GameCanvas({
   // Co-op gameplay: take damage
   const takeDamage = (amount) => {
     const state = stateRef.current;
+    
+    // Check if active boss shield absorbs the hit
+    if (state.bossShieldActive && state.bossShieldHealth > 0) {
+      state.bossShieldHealth -= 1;
+      GameAudio.play('shield_hit');
+      // Spark a defensive shield blast at ship position
+      const shipX = window.innerWidth / 2;
+      const shipY = window.innerHeight - 80;
+      createExplosion(shipX, shipY, '#38bdf8', 12, false);
+      
+      if (state.bossShieldHealth <= 0) {
+        state.bossShieldActive = false;
+      }
+      return; // Prevent damage from reducing player health!
+    }
+
     state.health = Math.max(0, state.health - amount);
     state.screenShake = 12;
     state.flashFrame = 4;
@@ -1139,13 +1662,21 @@ export default function GameCanvas({
         GameAudio.play('explosionLarge');
         state.bossObj = null;
         
+        // Spawn shield claim orb animation
+        if (!state.shieldClaims) state.shieldClaims = [];
+        state.shieldClaims.push({
+          x: boss.x,
+          y: boss.y,
+          progress: 0
+        });
+        
         // Wait, clear all remaining minions/bullets
         state.enemies = [];
         state.bullets = [];
         
-        // Advance wave
+        // Advance wave or docking station
         setTimeout(() => {
-          advanceNextWave();
+          handleWaveEndDetection();
         }, 1500);
       } else {
         // Activate next word in cycle pattern
@@ -1346,6 +1877,33 @@ export default function GameCanvas({
       ctx.fill();
       ctx.restore();
     });
+
+    // Draw shield claim orb animations
+    if (state.shieldClaims && state.shieldClaims.length > 0) {
+      const targetX = canvas.width / 2;
+      const targetY = canvas.height - 80;
+      state.shieldClaims.forEach(orb => {
+        const curX = orb.x + (targetX - orb.x) * orb.progress;
+        const curY = orb.y + (targetY - orb.y) * orb.progress;
+        
+        ctx.save();
+        ctx.strokeStyle = '#38bdf8';
+        ctx.shadowColor = '#38bdf8';
+        ctx.shadowBlur = 10;
+        ctx.lineWidth = 1.5;
+        ctx.globalAlpha = 0.75 * (1 - orb.progress * 0.3);
+        
+        ctx.beginPath();
+        ctx.arc(curX, curY, 8 + Math.sin(Date.now() / 80) * 2, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.arc(curX, curY, 3, 0, Math.PI * 2);
+        ctx.fillStyle = '#38bdf8';
+        ctx.fill();
+        ctx.restore();
+      });
+    }
 
     // Draw Lasers
     state.lasers.forEach(laser => {
@@ -1732,6 +2290,28 @@ export default function GameCanvas({
       ctx.textAlign = 'center';
       ctx.fillText(labelText, 0, 30);
 
+      // Draw tactical shield bubble if active for this player
+      if (labelText.includes('(You)') && state.shieldActive) {
+        ctx.strokeStyle = '#a3e635'; // Neon lime
+        ctx.shadowColor = '#a3e635';
+        ctx.shadowBlur = 12;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, 28, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Draw boss shield bubble if active for this player
+      if (labelText.includes('(You)') && state.bossShieldActive) {
+        ctx.strokeStyle = '#38bdf8'; // Sky blue neon
+        ctx.shadowColor = '#38bdf8';
+        ctx.shadowBlur = 15;
+        ctx.lineWidth = 2.0;
+        ctx.beginPath();
+        ctx.arc(0, 0, 31, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
       ctx.restore();
     };
 
@@ -1739,7 +2319,10 @@ export default function GameCanvas({
       // Draw all active teammates in co-op
       players.forEach(p => {
         const sx = getShipX(p.position, canvas.width);
-        const sy = canvas.height - 80;
+        let sy = canvas.height - 80;
+        if (state.waveState === 'docking') {
+          sy -= state.dockingShipYOffset;
+        }
         
         // Draw only if player has not died
         const mateState = state.teammates.find(m => m.socketId === p.socketId);
@@ -1750,7 +2333,77 @@ export default function GameCanvas({
       });
     } else {
       // Draw single solo player ship
-      renderShip(canvas.width / 2, canvas.height - 80, shipColor, username + ' (You)');
+      let sy = canvas.height - 80;
+      if (state.waveState === 'docking') {
+        sy -= state.dockingShipYOffset;
+      }
+      renderShip(canvas.width / 2, sy, shipColor, username + ' (You)');
+    }
+
+    // Render Docking Space Station Hangar visual overlays
+    if (state.waveState === 'docking') {
+      ctx.save();
+      // Draw massive space station hangar hull (low opacity vector lines)
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+      ctx.lineWidth = 1.5;
+      
+      const stationY = -120 + state.dockingShipYOffset * 0.75;
+      ctx.beginPath();
+      // Draw hanger ceiling
+      ctx.rect(canvas.width * 0.15, stationY, canvas.width * 0.7, 80);
+      ctx.stroke();
+
+      // Hanger bay support trusses
+      ctx.beginPath();
+      for (let tx = canvas.width * 0.2; tx < canvas.width * 0.8; tx += 60) {
+        ctx.rect(tx, stationY, 20, 80);
+      }
+      ctx.stroke();
+      
+      // Draw clamp arms and guide lasers for each ship
+      const shipXCoords = isMultiplayer
+        ? players.map(p => getShipX(p.position, canvas.width))
+        : [canvas.width / 2];
+
+      shipXCoords.forEach(shipX => {
+        const shipY = canvas.height - 80 - state.dockingShipYOffset;
+
+        // Alignment guide lasers (thin dashed cyan)
+        if (state.dockingShipYOffset > 80) {
+          ctx.strokeStyle = 'rgba(6, 182, 212, 0.4)';
+          ctx.lineWidth = 1.0;
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.moveTo(shipX - 25, stationY + 80);
+          ctx.lineTo(shipX - 25, shipY);
+          ctx.moveTo(shipX + 25, stationY + 80);
+          ctx.lineTo(shipX + 25, shipY);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
+        // Mechanical clamps claws (grayish steel arms)
+        if (state.dockingShipYOffset > 170) {
+          ctx.strokeStyle = 'rgba(138, 143, 163, 0.6)';
+          ctx.lineWidth = 3.0;
+          ctx.beginPath();
+          // Left clamp claw arm extending out
+          ctx.moveTo(shipX - 44, shipY);
+          ctx.lineTo(shipX - 20, shipY);
+          // Right clamp claw arm
+          ctx.moveTo(shipX + 44, shipY);
+          ctx.lineTo(shipX + 20, shipY);
+          ctx.stroke();
+
+          // Spark particle puffs on impact (triggers once)
+          if (!state.hasPuffedSteam) {
+            createExplosion(shipX - 20, shipY, '#cbd5e1', 12);
+            createExplosion(shipX + 20, shipY, '#cbd5e1', 12);
+            state.hasPuffedSteam = true;
+          }
+        }
+      });
+      ctx.restore();
     }
 
     // Cutscenes & Banners (e.g. Wave transitions)
@@ -1827,6 +2480,11 @@ export default function GameCanvas({
 
   const [paused, setPaused] = useState(false);
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
+  const [charge, setCharge] = useState(0);
+  const [cooldowns, setCooldowns] = useState([0, 0, 0]);
+  const [bossShields, setBossShields] = useState(0);
+  const [bossShieldActiveTime, setBossShieldActiveTime] = useState(0);
+  const [statusClocks, setStatusClocks] = useState({ overclock: 0, decoy: 0, nebula: 0, stabilizer: 0, overdrive: 0, reflector: 0, hologram: 0 });
 
   // Sync React state back to stateRef
   useEffect(() => {
@@ -1859,6 +2517,248 @@ export default function GameCanvas({
         tabIndex="0"
         onKeyDown={handleKeyDown}
       />
+
+      {/* Tactical Skill HUD Overlay (Left Column - Under Multiplier) */}
+      <div 
+        style={{
+          position: 'absolute',
+          left: '1.5rem',
+          top: '7.5rem',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-start',
+          gap: '0.8rem',
+          zIndex: 100,
+          pointerEvents: 'none',
+          userSelect: 'none'
+        }}
+      >
+        {/* Row containing Charge Bar & Boss Shield */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem' }}>
+          {/* Vertical Charge Bar */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.3rem' }}>
+            <div 
+              style={{
+                width: '8px',
+                height: '50px',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                background: 'rgba(255, 255, 255, 0.02)',
+                borderRadius: '4px',
+                position: 'relative',
+                overflow: 'hidden',
+                opacity: charge >= 100 ? 0.75 : 0.2,
+                transition: 'opacity 0.3s ease, box-shadow 0.3s ease',
+                boxShadow: charge >= 100 ? '0 0 10px rgba(74, 144, 226, 0.4)' : 'none'
+              }}
+            >
+              <div 
+                style={{
+                  position: 'absolute',
+                  bottom: 0,
+                  left: 0,
+                  width: '100%',
+                  height: `${charge}%`,
+                  background: '#4a90e2',
+                  transition: 'height 0.2s ease'
+                }}
+              />
+            </div>
+            <span 
+              style={{ 
+                fontFamily: 'var(--font-display)', 
+                fontSize: '8px', 
+                color: '#ffffff', 
+                letterSpacing: '0.5px',
+                opacity: charge >= 100 ? 0.75 : 0.25,
+                transition: 'opacity 0.3s'
+              }}
+            >
+              {charge}%
+            </span>
+          </div>
+
+          {/* Stored Boss Shield Indicators (3 slots) */}
+          <div 
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '0.2rem',
+              opacity: 0.75, // always glowing at 75%
+              transition: 'opacity 0.3s'
+            }}
+            title="Defensive Boss Shield cores [A]"
+          >
+            <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+              {[0, 1, 2].map(sIdx => {
+                const isClaimed = bossShields > sIdx;
+                return (
+                  <div 
+                    key={sIdx}
+                    style={{
+                      width: '18px',
+                      height: '18px',
+                      borderRadius: '50%',
+                      border: isClaimed ? '1px solid #38bdf8' : '1px dashed rgba(56, 189, 248, 0.15)',
+                      background: isClaimed ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
+                      boxShadow: isClaimed ? '0 0 6px rgba(56, 189, 248, 0.4)' : 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      opacity: isClaimed ? 0.75 : 0.15,
+                      transition: 'all 0.3s ease'
+                    }}
+                  >
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.5">
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    </svg>
+                  </div>
+                );
+              })}
+            </div>
+            <span style={{ fontSize: '7px', fontFamily: 'var(--font-display)', color: '#38bdf8', opacity: 0.6 }}>
+              [A]
+            </span>
+          </div>
+
+          {/* Active Boss Shield timer display next to it */}
+          {bossShieldActiveTime > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', marginLeft: '0.2rem' }}>
+              <span style={{ fontSize: '7px', fontFamily: 'var(--font-display)', color: '#38bdf8', opacity: 0.25, letterSpacing: '0.5px' }}>
+                SHIELD
+              </span>
+              <span style={{ fontSize: '9px', fontFamily: 'var(--font-display)', color: '#38bdf8', opacity: 0.25, fontWeight: 700 }}>
+                {bossShieldActiveTime}s
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Vertical Skill Slots */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.2rem' }}>
+          {[0, 1, 2].map(idx => {
+            const skId = equippedSkills ? equippedSkills[idx] : null;
+            const skill = SKILLS_DB.find(s => s.id === skId);
+            if (!skill) return null;
+
+            const isUsable = charge >= skill.cost && cooldowns[idx] === 0;
+            const isOnCooldown = cooldowns[idx] > 0;
+
+            const getActiveDuration = (sId) => {
+              if (sId === 'overclock') return statusClocks.overclock;
+              if (sId === 'decoy_probe') return statusClocks.decoy;
+              if (sId === 'nebula_veil') return statusClocks.nebula;
+              if (sId === 'combo_stabilizer') return statusClocks.stabilizer;
+              if (sId === 'overdrive_thruster') return statusClocks.overdrive;
+              if (sId === 'reflector_shield') return statusClocks.reflector;
+              if (sId === 'hologram_decoy') return statusClocks.hologram;
+              if (sId === 'emp_discharge') return Math.ceil(stateRef.current.empFreezeTime / 1000);
+              return 0;
+            };
+
+            const actTime = getActiveDuration(skill.id);
+
+            let borderStyle = `1px solid ${skill.color}`;
+            let shadowStyle = `0 0 6px ${skill.color}15`;
+            if (isUsable) {
+              shadowStyle = `0 0 10px ${skill.color}45`;
+            }
+
+            return (
+              <div 
+                key={idx}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.6rem'
+                }}
+              >
+                {/* Skill Circle */}
+                <div
+                  style={{
+                    width: '30px',
+                    height: '30px',
+                    borderRadius: '50%',
+                    border: borderStyle,
+                    background: 'rgba(5, 5, 8, 0.7)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: skill.color,
+                    opacity: isUsable ? 0.75 : 0.12,
+                    boxShadow: shadowStyle,
+                    transition: 'all 0.3s ease',
+                    position: 'relative',
+                    overflow: 'hidden'
+                  }}
+                  title={`${skill.name} - Cost: ${skill.cost}%`}
+                >
+                  {skill.svgIcon(skill.color)}
+
+                  {/* Cooldown Wipe Circle */}
+                  {isOnCooldown && (
+                    <div 
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        background: 'rgba(0, 0, 0, 0.55)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      {/* Faint Red Strike-off Slash Line */}
+                      <div 
+                        style={{
+                          position: 'absolute',
+                          width: '120%',
+                          height: '1.5px',
+                          background: '#cf4042',
+                          transform: 'rotate(-45deg)',
+                          opacity: 0.35
+                        }}
+                      />
+                      
+                      <span 
+                        style={{
+                          fontFamily: 'var(--font-display)',
+                          fontSize: '9px',
+                          fontWeight: 700,
+                          color: '#ffffff',
+                          opacity: 0.6,
+                          zIndex: 2
+                        }}
+                      >
+                        {cooldowns[idx]}s
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Active duration clock indicator next to it */}
+                {actTime > 0 && (
+                  <span 
+                    style={{
+                      fontFamily: 'var(--font-display)',
+                      fontSize: '7px',
+                      color: skill.color,
+                      opacity: 0.22,
+                      fontWeight: 600,
+                      letterSpacing: '0.5px',
+                      marginLeft: '0.2rem'
+                    }}
+                  >
+                    {actTime}s
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       {/* Pause Menu Overlay in HTML/React when paused */}
       {paused && (
@@ -2051,7 +2951,16 @@ export default function GameCanvas({
         }}
         title={paused ? 'Resume Game' : 'Pause Game'}
       >
-        {paused ? '▶' : '‖'}
+        {paused ? (
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style={{ transform: 'translateX(1px)' }}>
+            <polygon points="5,3 19,12 5,21" />
+          </svg>
+        ) : (
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+            <rect x="5" y="4" width="4" height="16" />
+            <rect x="15" y="4" width="4" height="16" />
+          </svg>
+        )}
       </button>
 
       <GameHUD

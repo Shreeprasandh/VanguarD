@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 
-export default function MenuBackground() {
+export default function MenuBackground({ shipColor = 'blue' }) {
   const canvasRef = useRef(null);
   const mouseRef = useRef({ x: -1000, y: -1000, active: false });
   const trailHistory = useRef([]); // Stores last mouse positions
@@ -17,6 +17,8 @@ export default function MenuBackground() {
     handleResize();
     window.addEventListener('resize', handleResize);
 
+    const trailParticles = [];
+
     const handleMouseMove = (e) => {
       mouseRef.current.x = e.clientX;
       mouseRef.current.y = e.clientY;
@@ -30,6 +32,19 @@ export default function MenuBackground() {
       if (trailHistory.current.length > 20) {
         trailHistory.current.shift();
       }
+
+      // Spawn trail spark particles
+      for (let p = 0; p < 2; p++) {
+        trailParticles.push({
+          x: e.clientX,
+          y: e.clientY,
+          vx: (Math.random() - 0.5) * 1.4,
+          vy: (Math.random() - 0.5) * 1.4,
+          size: 1.0 + Math.random() * 2.5,
+          life: 35,
+          maxLife: 35
+        });
+      }
     };
 
     const handleMouseLeave = () => {
@@ -39,9 +54,8 @@ export default function MenuBackground() {
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseleave', handleMouseLeave);
 
-    // Drifting constellation nodes
     const nodes = [];
-    const nodeCount = 30;
+    const nodeCount = 130;
     for (let i = 0; i < nodeCount; i++) {
       nodes.push({
         x: Math.random() * window.innerWidth,
@@ -56,56 +70,111 @@ export default function MenuBackground() {
       });
     }
 
-    // Static decorative background scenery objects (extremely low opacity 2%-3%)
+    // Static background objects with custom opacities to indicate distance
     const bgObjects = [
-      // 1. Highly Detailed Planet Left
+      // 1. Planet (Left top) - Close/Bright
       {
         type: 'planet',
         x: window.innerWidth * 0.15,
         y: window.innerHeight * 0.25,
         radius: 50,
         vx: 0.015,
-        vy: -0.008
+        vy: -0.008,
+        opacity: 0.13
       },
-      // 2. Space Station (Solar Arrays / Trusses) Right
+      // 2. Orbital Satellite (Right top) - Mid
       {
-        type: 'station',
+        type: 'satellite',
         x: window.innerWidth * 0.82,
         y: window.innerHeight * 0.3,
-        size: 90,
+        size: 65,
         vx: -0.01,
-        vy: 0.01
+        vy: 0.01,
+        opacity: 0.08
       },
-      // 3. Cratered Asteroid belt cluster top right
+      // 3. Cratered Asteroid (Mid top) - Far/Faint
       {
         type: 'asteroid',
         x: window.innerWidth * 0.72,
         y: window.innerHeight * 0.15,
-        radius: 22,
-        offsets: [8, -4, 10, 3, -6, 12, -9, -1],
+        radius: 24,
+        offsets: [6, -3, 8, 2, -5, 9, -7, -1],
         vx: 0.02,
-        vy: 0.015
+        vy: 0.015,
+        opacity: 0.05
       },
-      // 4. Broken Ship Wreckage bottom left (exposed frames, cables)
+      // 4. Space Observatory Telescope (Left mid-bottom) - Mechanical structure (replaces old human-like wreckage)
       {
-        type: 'wreckage',
-        x: window.innerWidth * 0.22,
-        y: window.innerHeight * 0.72,
+        type: 'telescope',
+        x: window.innerWidth * 0.2,
+        y: window.innerHeight * 0.65,
         size: 70,
-        vx: -0.012,
-        vy: -0.012
+        vx: -0.008,
+        vy: -0.008,
+        opacity: 0.12
       },
-      // 5. Sun with Orbiting Planets
+      // 5. Orbiting Solar System (Mid Bottom-Right) - Stationary to remain fully visible
       {
         type: 'solar',
-        x: window.innerWidth * 0.5,
-        y: window.innerHeight * 0.8,
+        x: window.innerWidth * 0.62,
+        y: window.innerHeight * 0.85,
         sunRadius: 16,
         orbitRadius: 60,
         orbitAngle: 0,
         orbitSpeed: 0.0008,
+        vx: 0,
+        vy: 0,
+        opacity: 0.07
+      },
+      // 6. Communications Radar Array (Bottom Left) - Mid
+      {
+        type: 'comms_dish',
+        x: window.innerWidth * 0.08,
+        y: window.innerHeight * 0.85,
+        size: 45,
+        vx: 0.012,
+        vy: -0.006,
+        opacity: 0.08
+      },
+      // 7. Fighter Wing Debris (Bottom Right) - Close
+      {
+        type: 'wing_scrap',
+        x: window.innerWidth * 0.82,
+        y: window.innerHeight * 0.75,
+        size: 50,
+        vx: -0.015,
+        vy: 0.008,
+        opacity: 0.11
+      },
+      // 8. Distant Double Asteroids (Mid Left-Bottom) - Far
+      {
+        type: 'double_asteroid',
+        x: window.innerWidth * 0.35,
+        y: window.innerHeight * 0.88,
+        radius: 12,
         vx: 0.008,
-        vy: -0.008
+        vy: 0.012,
+        opacity: 0.06
+      },
+      // 9. Detailed Ringed Planet (Mid Bottom-Left) - Close
+      {
+        type: 'ringed_planet',
+        x: window.innerWidth * 0.22,
+        y: window.innerHeight * 0.85,
+        radius: 20,
+        vx: 0.005,
+        vy: -0.003,
+        opacity: 0.10
+      },
+      // 10. Weather Satellite (Bottom Right Corner) - Mid
+      {
+        type: 'weather_satellite',
+        x: window.innerWidth * 0.88,
+        y: window.innerHeight * 0.86,
+        size: 30,
+        vx: -0.004,
+        vy: 0.005,
+        opacity: 0.09
       }
     ];
 
@@ -135,6 +204,13 @@ export default function MenuBackground() {
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       const mouse = mouseRef.current;
+      
+      const getShipColorStyle = (colorName) => {
+        if (colorName === 'red') return { rgb: '207, 64, 66', hex: '#cf4042' };
+        if (colorName === 'green') return { rgb: '46, 189, 89', hex: '#2ebd59' };
+        return { rgb: '74, 144, 226', hex: '#4a90e2' }; // blue
+      };
+      const themeStyle = getShipColorStyle(shipColor);
 
       // Draw Warped Minimal Grid (1.2% transparency - extremely subtle)
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.009)';
@@ -163,19 +239,35 @@ export default function MenuBackground() {
         ctx.stroke();
       }
 
-      // Draw background scenery objects (extremely low opacity 2%-3% for elegant look)
+      // Draw background scenery objects with custom opacities to indicate distance
       bgObjects.forEach(obj => {
         obj.x += obj.vx;
         obj.y += obj.vy;
 
-        // Reset if drifted too far off screen
-        if (obj.x < -150) obj.x = canvas.width + 150;
-        if (obj.x > canvas.width + 150) obj.x = -150;
-        if (obj.y < -150) obj.y = canvas.height + 150;
-        if (obj.y > canvas.height + 150) obj.y = -150;
+        // Keep objects strictly bounded within the safe margins of the viewport (no edge cut-offs!)
+        const sizeVal = obj.radius || obj.size || 50;
+        const marginX = sizeVal + 15;
+        const marginY = sizeVal + 15;
+
+        if (obj.x < marginX) {
+          obj.x = marginX;
+          obj.vx = Math.abs(obj.vx || 0.005); // bounce right
+        } else if (obj.x > canvas.width - marginX) {
+          obj.x = canvas.width - marginX;
+          obj.vx = -Math.abs(obj.vx || 0.005); // bounce left
+        }
+
+        if (obj.y < marginY) {
+          obj.y = marginY;
+          obj.vy = Math.abs(obj.vy || 0.005); // bounce down
+        } else if (obj.y > canvas.height - marginY) {
+          obj.y = canvas.height - marginY;
+          obj.vy = -Math.abs(obj.vy || 0.005); // bounce up
+        }
 
         ctx.save();
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.025)';
+        const baseOpacity = obj.opacity || 0.08;
+        ctx.strokeStyle = `rgba(255, 255, 255, ${baseOpacity})`;
         ctx.lineWidth = 1.0;
 
         if (obj.type === 'planet') {
@@ -192,7 +284,7 @@ export default function MenuBackground() {
           ctx.ellipse(obj.x, obj.y, obj.radius * 1.45, obj.radius * 0.25, Math.PI / 6, 0, Math.PI * 2);
           ctx.stroke();
 
-          // Internal Craters (circles with shadow offsets)
+          // Internal Craters
           ctx.beginPath();
           ctx.arc(obj.x - 15, obj.y - 10, 6, 0, Math.PI * 2);
           ctx.arc(obj.x + 10, obj.y + 15, 8, 0, Math.PI * 2);
@@ -203,47 +295,85 @@ export default function MenuBackground() {
           ctx.beginPath();
           ctx.arc(obj.x, obj.y, obj.radius - 2, -Math.PI / 3, Math.PI / 2);
           ctx.stroke();
-        } else if (obj.type === 'station') {
-          // Central cylinder module core
+        } else if (obj.type === 'satellite') {
+          // Central satellite core cylinder
           ctx.beginPath();
-          ctx.rect(obj.x - 10, obj.y - obj.size / 3, 20, (obj.size / 3) * 2);
+          ctx.rect(obj.x - 6, obj.y - 12, 12, 24);
           ctx.stroke();
-
-          // Horizontal truss beams
+          // Satellite wing supports
           ctx.beginPath();
-          ctx.moveTo(obj.x - obj.size / 2, obj.y);
-          ctx.lineTo(obj.x + obj.size / 2, obj.y);
+          ctx.moveTo(obj.x - 6, obj.y); ctx.lineTo(obj.x - 14, obj.y);
+          ctx.moveTo(obj.x + 6, obj.y); ctx.lineTo(obj.x + 14, obj.y);
           ctx.stroke();
-
-          // Left Wing Solar Array Panels (detailed grid)
+          // Solar array grids left and right
           ctx.beginPath();
-          ctx.rect(obj.x - obj.size / 2, obj.y - 20, 20, 40);
+          ctx.rect(obj.x - 30, obj.y - 8, 16, 16);
+          ctx.rect(obj.x + 14, obj.y - 8, 16, 16);
           ctx.stroke();
-          for (let py = obj.y - 16; py < obj.y + 20; py += 8) {
-            ctx.beginPath();
-            ctx.moveTo(obj.x - obj.size / 2, py);
-            ctx.lineTo(obj.x - obj.size / 2 + 20, py);
-            ctx.stroke();
-          }
-
-          // Right Wing Solar Array Panels
+          // Grid lines inside arrays
           ctx.beginPath();
-          ctx.rect(obj.x + obj.size / 2 - 20, obj.y - 20, 20, 40);
+          ctx.moveTo(obj.x - 22, obj.y - 8); ctx.lineTo(obj.x - 22, obj.y + 8);
+          ctx.moveTo(obj.x + 22, obj.y - 8); ctx.lineTo(obj.x + 22, obj.y + 8);
+          ctx.moveTo(obj.x - 30, obj.y); ctx.lineTo(obj.x - 14, obj.y);
+          ctx.moveTo(obj.x + 14, obj.y); ctx.lineTo(obj.x + 30, obj.y);
           ctx.stroke();
-          for (let py = obj.y - 16; py < obj.y + 20; py += 8) {
-            ctx.beginPath();
-            ctx.moveTo(obj.x + obj.size / 2 - 20, py);
-            ctx.lineTo(obj.x + obj.size / 2, py);
-            ctx.stroke();
-          }
-
-          // Communication dishes
+          // Communication antenna dish on top
           ctx.beginPath();
-          ctx.arc(obj.x, obj.y - obj.size / 3 - 6, 6, 0, Math.PI, true);
+          ctx.arc(obj.x, obj.y - 15, 5, 0, Math.PI, true);
           ctx.stroke();
           ctx.beginPath();
-          ctx.moveTo(obj.x, obj.y - obj.size / 3 - 6);
-          ctx.lineTo(obj.x, obj.y - obj.size / 3 - 14);
+          ctx.moveTo(obj.x, obj.y - 15); ctx.lineTo(obj.x, obj.y - 20);
+          ctx.stroke();
+        } else if (obj.type === 'comms_dish') {
+          // Ground support base truss
+          ctx.beginPath();
+          ctx.moveTo(obj.x - 10, obj.y + 14);
+          ctx.lineTo(obj.x, obj.y + 2);
+          ctx.lineTo(obj.x + 10, obj.y + 14);
+          ctx.stroke();
+          // Curved parabolic dish outline
+          ctx.beginPath();
+          ctx.arc(obj.x, obj.y - 4, 12, -Math.PI * 0.85, -Math.PI * 0.15);
+          ctx.stroke();
+          // Feed horn spike
+          ctx.beginPath();
+          ctx.moveTo(obj.x, obj.y - 12);
+          ctx.lineTo(obj.x, obj.y - 20);
+          ctx.stroke();
+          // Small glowing beam receiver point
+          ctx.beginPath();
+          ctx.arc(obj.x, obj.y - 20, 1.5, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (obj.type === 'wing_scrap') {
+          // Sharp delta wing panel debris
+          ctx.beginPath();
+          ctx.moveTo(obj.x - 15, obj.y - 15);
+          ctx.lineTo(obj.x + 15, obj.y - 5);
+          ctx.lineTo(obj.x - 5, obj.y + 15);
+          ctx.closePath();
+          ctx.stroke();
+          // Interior panel lines
+          ctx.beginPath();
+          ctx.moveTo(obj.x - 10, obj.y - 10);
+          ctx.lineTo(obj.x - 3, obj.y + 5);
+          ctx.stroke();
+          // Exposed wiring/cables hanging
+          ctx.beginPath();
+          ctx.moveTo(obj.x - 15, obj.y - 15);
+          ctx.bezierCurveTo(obj.x - 25, obj.y - 12, obj.x - 20, obj.y - 2, obj.x - 22, obj.y + 5);
+          ctx.stroke();
+        } else if (obj.type === 'double_asteroid') {
+          // Large rocky asteroid
+          ctx.beginPath();
+          ctx.arc(obj.x - 6, obj.y, 7, 0, Math.PI * 2);
+          ctx.stroke();
+          // Internal crater lines
+          ctx.beginPath();
+          ctx.arc(obj.x - 8, obj.y - 2, 1.5, 0, Math.PI * 2);
+          ctx.stroke();
+          // Small companion rock drifting nearby
+          ctx.beginPath();
+          ctx.arc(obj.x + 8, obj.y + 6, 3.5, 0, Math.PI * 2);
           ctx.stroke();
         } else if (obj.type === 'asteroid') {
           // Irregular rock silhouette
@@ -259,7 +389,7 @@ export default function MenuBackground() {
           ctx.closePath();
           ctx.stroke();
 
-          // Surface cracks & internal shading contours
+          // Surface cracks
           ctx.beginPath();
           ctx.moveTo(obj.x - 8, obj.y - 8);
           ctx.lineTo(obj.x, obj.y - 2);
@@ -268,42 +398,68 @@ export default function MenuBackground() {
           ctx.lineTo(obj.x - 5, obj.y + 6);
           ctx.stroke();
           
-          // Internal crater lines
+          // Internal crater
           ctx.beginPath();
           ctx.arc(obj.x + 5, obj.y + 4, 3, 0, Math.PI * 2);
           ctx.stroke();
-        } else if (obj.type === 'wreckage') {
-          // Swept vector wing outlines (broken frame)
+        } else if (obj.type === 'telescope') {
+          // Telescope main cylinder tube
           ctx.beginPath();
-          ctx.moveTo(obj.x - obj.size / 2, obj.y - obj.size / 4);
-          ctx.lineTo(obj.x - obj.size / 8, obj.y - obj.size / 4);
-          ctx.moveTo(obj.x + obj.size / 8, obj.y - obj.size / 4);
-          ctx.lineTo(obj.x + obj.size / 2, obj.y - obj.size / 4);
-          ctx.lineTo(obj.x + obj.size / 3, obj.y + obj.size / 8);
-          ctx.moveTo(obj.x - obj.size / 3, obj.y + obj.size / 8);
+          ctx.rect(obj.x - 10, obj.y - 20, 20, 40);
+          ctx.stroke();
+          // Diagonal solar array panel wings
+          ctx.beginPath();
+          ctx.rect(obj.x - 30, obj.y - 4, 20, 8);
+          ctx.rect(obj.x + 10, obj.y - 4, 20, 8);
+          ctx.stroke();
+          // Support joints
+          ctx.beginPath();
+          ctx.moveTo(obj.x, obj.y + 20);
+          ctx.lineTo(obj.x - 8, obj.y + 32);
+          ctx.lineTo(obj.x + 8, obj.y + 32);
+          ctx.stroke();
+          // Front open lens cap ring
+          ctx.beginPath();
+          ctx.ellipse(obj.x, obj.y - 20, 10, 3, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (obj.type === 'ringed_planet') {
+          // Central sphere
+          ctx.beginPath();
+          ctx.arc(obj.x, obj.y, obj.radius || 20, 0, Math.PI * 2);
+          ctx.stroke();
+          // Planet rings
+          ctx.beginPath();
+          ctx.ellipse(obj.x, obj.y, (obj.radius || 20) * 1.8, (obj.radius || 20) * 0.45, Math.PI / 8, 0, Math.PI * 2);
+          ctx.stroke();
+          // Shadow surface crescent
+          ctx.beginPath();
+          ctx.arc(obj.x, obj.y, (obj.radius || 20) - 2, Math.PI * 0.1, Math.PI * 0.9);
+          ctx.stroke();
+        } else if (obj.type === 'weather_satellite') {
+          // Diamond body core
+          ctx.beginPath();
+          ctx.moveTo(obj.x, obj.y - 12);
+          ctx.lineTo(obj.x + 12, obj.y);
+          ctx.lineTo(obj.x, obj.y + 12);
+          ctx.lineTo(obj.x - 12, obj.y);
           ctx.closePath();
           ctx.stroke();
-
-          // Exposed structural ribs (ribbing grid)
+          // Solar panels
           ctx.beginPath();
-          for (let rx = obj.x - obj.size / 2 + 10; rx < obj.x - 10; rx += 8) {
-            ctx.moveTo(rx, obj.y - obj.size / 4);
-            ctx.lineTo(rx + 2, obj.y - obj.size / 12);
-          }
+          ctx.rect(obj.x - 26, obj.y - 3, 14, 6);
+          ctx.rect(obj.x + 12, obj.y - 3, 14, 6);
           ctx.stroke();
-
-          // Thruster cylindrical engine nozzles
+          // Bottom antenna dish
           ctx.beginPath();
-          ctx.rect(obj.x - 12, obj.y - obj.size / 4 - 8, 8, 8);
-          ctx.rect(obj.x + 4, obj.y - obj.size / 4 - 8, 8, 8);
+          ctx.arc(obj.x, obj.y + 12, 4, 0, Math.PI);
           ctx.stroke();
-
-          // Loose bezier cables hanging
+        } else if (obj.type === 'wreckage') {
+          // Swept wing panels
           ctx.beginPath();
-          ctx.moveTo(obj.x - 8, obj.y - obj.size / 4);
-          ctx.bezierCurveTo(obj.x - 12, obj.y, obj.x - 20, obj.y + 5, obj.x - 18, obj.y + 20);
-          ctx.moveTo(obj.x + 8, obj.y - obj.size / 4);
-          ctx.bezierCurveTo(obj.x + 12, obj.y - 5, obj.x + 5, obj.y + 15, obj.x + 10, obj.y + 18);
+          ctx.moveTo(obj.x - 20, obj.y - 10);
+          ctx.lineTo(obj.x + 20, obj.y - 15);
+          ctx.lineTo(obj.x + 5, obj.y + 15);
+          ctx.closePath();
           ctx.stroke();
         } else if (obj.type === 'solar') {
           // Center sun
@@ -322,18 +478,18 @@ export default function MenuBackground() {
           // Orbit line
           ctx.beginPath();
           ctx.arc(obj.x, obj.y, obj.orbitRadius, 0, Math.PI * 2);
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.007)';
+          ctx.strokeStyle = `rgba(255, 255, 255, ${baseOpacity * 0.25})`;
           ctx.stroke();
 
-          // Orbiting planet node with crater details
+          // Orbiting planet node
           obj.orbitAngle += obj.orbitSpeed;
           const px = obj.x + Math.cos(obj.orbitAngle) * obj.orbitRadius;
           const py = obj.y + Math.sin(obj.orbitAngle) * obj.orbitRadius;
           ctx.beginPath();
           ctx.arc(px, py, 4, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.02)';
+          ctx.fillStyle = `rgba(255, 255, 255, ${baseOpacity * 1.5})`;
           ctx.fill();
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.025)';
+          ctx.strokeStyle = `rgba(255, 255, 255, ${baseOpacity * 2.0})`;
           ctx.stroke();
         }
 
@@ -379,30 +535,64 @@ export default function MenuBackground() {
         ctx.fill();
       });
 
-      // Draw vector ribbon mouse trail (extremely low transparency 8%, tapered width)
+      // Update and draw trail spark particles (glowing with ship color theme)
+      for (let i = trailParticles.length - 1; i >= 0; i--) {
+        const p = trailParticles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life--;
+        if (p.life <= 0) {
+          trailParticles.splice(i, 1);
+        } else {
+          ctx.save();
+          const alpha = (p.life / p.maxLife) * 0.32; // slightly reduced transparency (made more solid)
+          ctx.fillStyle = `rgba(${themeStyle.rgb}, ${alpha})`;
+          ctx.shadowBlur = 4;
+          ctx.shadowColor = themeStyle.hex;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+
+      // Draw glowing double-ribbon mouse trail (with ship color theme and reduced transparency)
       const history = trailHistory.current;
       if (mouse.active && history.length > 1) {
+        ctx.save();
+        ctx.shadowBlur = 6;
+        ctx.shadowColor = themeStyle.hex;
+        
         for (let i = 1; i < history.length; i++) {
           const ptStart = history[i - 1];
           const ptEnd = history[i];
           
           // Width decreases towards the beginning of the history array (the tail)
-          const taperWidth = 0.2 + (i / history.length) * 2.5; 
+          const taperWidth = 0.4 + (i / history.length) * 3.5; 
           // Opacity increases towards the current mouse position (the head)
-          const stepAlpha = (i / history.length) * 0.08; 
+          const stepAlpha = (i / history.length) * 0.28; // reduced transparency (from 0.15 to 0.28)
           
           ctx.beginPath();
           ctx.moveTo(ptStart.x, ptStart.y);
           ctx.lineTo(ptEnd.x, ptEnd.y);
-          ctx.strokeStyle = `rgba(74, 144, 226, ${stepAlpha})`;
+          ctx.strokeStyle = `rgba(${themeStyle.rgb}, ${stepAlpha})`;
           ctx.lineWidth = taperWidth;
           ctx.stroke();
-        }
 
-        // Draw modern crosshair concentric ring around cursor (6% transparency)
+          // Outer secondary sub-glow ribbon
+          ctx.beginPath();
+          ctx.moveTo(ptStart.x + 2, ptStart.y - 2);
+          ctx.lineTo(ptEnd.x + 2, ptEnd.y - 2);
+          ctx.strokeStyle = `rgba(${themeStyle.rgb}, ${stepAlpha * 0.45})`;
+          ctx.lineWidth = taperWidth * 0.5;
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        // Draw modern crosshair concentric ring around cursor (reduced transparency)
         ctx.save();
         ctx.translate(mouse.x, mouse.y);
-        ctx.strokeStyle = 'rgba(74, 144, 226, 0.06)';
+        ctx.strokeStyle = `rgba(${themeStyle.rgb}, 0.12)`; // slightly reduced transparency (made more solid)
         ctx.lineWidth = 1.0;
         // Inner circle
         ctx.beginPath();
@@ -429,7 +619,7 @@ export default function MenuBackground() {
       window.removeEventListener('mouseleave', handleMouseLeave);
       cancelAnimationFrame(animId);
     };
-  }, []);
+  }, [shipColor]);
 
   return (
     <canvas

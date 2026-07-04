@@ -8,84 +8,134 @@ export default function StoryModal({ onClose }) {
   };
 
   return (
-    <div className="modal-overlay" onClick={handleClose}>
+    <div 
+      className="modal-overlay" 
+      onClick={handleClose}
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        background: 'rgba(2, 2, 4, 0.85)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+        backdropFilter: 'blur(8px)'
+      }}
+    >
       <div 
         className="glass-panel" 
         onClick={(e) => e.stopPropagation()}
         style={{
-          maxWidth: '520px',
-          background: 'rgba(5, 5, 5, 0.95)',
-          border: '1px solid rgba(255, 255, 255, 0.05)',
-          padding: '3rem',
-          borderRadius: '2px',
-          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.9)',
+          position: 'relative',
+          width: '90%',
+          maxWidth: '430px',
+          background: 'rgba(5, 5, 8, 0.97)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          padding: '2.5rem',
+          borderRadius: '4px',
+          boxShadow: '0 25px 60px rgba(0, 0, 0, 0.95)',
           animation: 'fadeIn 0.4s ease-out'
         }}
       >
+        {/* Futuristic Aesthetic Corner Brackets */}
+        <div style={{ position: 'absolute', top: '10px', left: '10px', width: '15px', height: '15px', borderTop: '2px solid rgba(255, 255, 255, 0.25)', borderLeft: '2px solid rgba(255, 255, 255, 0.25)' }} />
+        <div style={{ position: 'absolute', top: '10px', right: '10px', width: '15px', height: '15px', borderTop: '2px solid rgba(255, 255, 255, 0.25)', borderRight: '2px solid rgba(255, 255, 255, 0.25)' }} />
+        <div style={{ position: 'absolute', bottom: '10px', left: '10px', width: '15px', height: '15px', borderBottom: '2px solid rgba(255, 255, 255, 0.25)', borderLeft: '2px solid rgba(255, 255, 255, 0.25)' }} />
+        <div style={{ position: 'absolute', bottom: '10px', right: '10px', width: '15px', height: '15px', borderBottom: '2px solid rgba(255, 255, 255, 0.25)', borderRight: '2px solid rgba(255, 255, 255, 0.25)' }} />
+
         <style>{`
           .story-title {
-            font-family: var(--font-display);
-            font-size: 1.4rem;
-            letter-spacing: 4px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.15rem;
+            font-weight: 700;
+            letter-spacing: 5px;
             text-transform: uppercase;
-            margin-bottom: 2rem;
-            color: var(--text-primary);
+            margin-bottom: 1.8rem;
+            color: #ffffff;
             text-align: center;
           }
           .story-paragraph {
-            font-family: var(--font-body);
-            font-size: 1.05rem;
+            font-family: 'Georgia', serif;
+            font-size: 0.95rem;
             line-height: 1.8;
-            color: #dcdfe8;
+            color: #d2d6e6;
             text-align: justify;
-            margin-bottom: 1.5rem;
-            letter-spacing: 0.5px;
+            margin-bottom: 1.4rem;
+            letter-spacing: 0.2px;
             font-weight: 300;
           }
           .story-footer {
-            font-family: var(--font-display);
-            font-size: 0.9rem;
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 400;
             letter-spacing: 2px;
             text-align: center;
-            color: var(--neon-blue);
-            margin-top: 2.5rem;
+            color: #a2a6b8;
+            margin-top: 2rem;
             font-style: italic;
+            opacity: 0.85;
+          }
+          @media (max-width: 480px) {
+            .glass-panel {
+              padding: 1.5rem !important;
+            }
+            .story-title {
+              font-size: 1rem !important;
+              margin-bottom: 1.2rem !important;
+            }
+            .story-paragraph {
+              font-size: 0.82rem !important;
+              line-height: 1.6 !important;
+              margin-bottom: 1rem !important;
+            }
+            .story-footer {
+              font-size: 0.72rem !important;
+              margin-top: 1.2rem !important;
+            }
           }
         `}</style>
         
-        <div className="story-title">// THE VANGUARD INITIATIVE</div>
+        <div className="story-title">THE VANGUARDZ INITIATIVE</div>
         
         <p className="story-paragraph">
-          We and our friends are in war with another species, and they outnumber us in so much more.
-          We planned on going on the offensive with a small group in the hope of stalling them, but our friends are not strong. Yet, they carry the unbreakable will to fight for their people.
+          We watched our home world burn, a silent spark swallowed by the black ocean of space. The counselors told us that survival was enough, but to live on our knees is to fade into nothingness.
         </p>
         
         <p className="story-paragraph">
-          Seeing their resolve, you made a choice. Under the cover of cosmic dust, you sneaked away, venturing deep into the heart of enemy territory all by yourself. You hope to defeat them, or at least hold them off, finishing enough of their armada to open up a path for your friends.
+          Our friends carry the will to resist, but their ships are old, and their hearts are weary. If they engage the armada directly, they will be swept aside like space dust.
         </p>
 
         <p className="story-paragraph">
-          You knew the odds. You knew the final destination. You are ready to sacrifice everything...
+          So you made a choice. Under a shroud of stardust, you slipped into the dark alone, steering your fighter into the belly of the hostile empire. You do not seek glory—only to clear a path out of the shadows.
         </p>
         
         <div className="story-footer">
-          ...because we are him, and we will fight.
+          ...we are the final shield. We will stand.
         </div>
 
-        <button 
-          className="btn" 
-          style={{ 
-            marginTop: '3rem', 
-            background: 'transparent', 
-            border: '1px solid rgba(255, 255, 255, 0.1)', 
-            borderRadius: '2px', 
-            fontSize: '0.8rem',
-            letterSpacing: '1px'
-          }} 
-          onClick={handleClose}
-        >
-          Return to Command
-        </button>
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <button 
+            className="btn" 
+            style={{ 
+              marginTop: '2.2rem', 
+              background: 'transparent', 
+              border: '1px solid rgba(255, 255, 255, 0.15)', 
+              borderRadius: '2px', 
+              fontSize: '0.75rem',
+              letterSpacing: '2px',
+              textTransform: 'uppercase',
+              padding: '0.5rem 1.8rem',
+              color: '#ffffff',
+              cursor: 'pointer'
+            }} 
+            onClick={handleClose}
+          >
+            Launch Command
+          </button>
+        </div>
       </div>
     </div>
   );

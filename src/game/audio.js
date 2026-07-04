@@ -42,6 +42,57 @@ class AudioManager {
   }
 
   play(soundName) {
+    if (soundName === 'shield_activate') {
+      if (this.muted) return;
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(180, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(750, ctx.currentTime + 0.35);
+        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.45);
+      } catch (e) {}
+      return;
+    }
+    if (soundName === 'shield_hit') {
+      if (this.muted) return;
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        const gain1 = ctx.createGain();
+        const gain2 = ctx.createGain();
+        
+        osc1.type = 'triangle';
+        osc1.frequency.setValueAtTime(1100, ctx.currentTime);
+        osc1.frequency.linearRampToValueAtTime(450, ctx.currentTime + 0.2);
+        gain1.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
+        osc1.connect(gain1);
+        gain1.connect(ctx.destination);
+        
+        osc2.type = 'sawtooth';
+        osc2.frequency.setValueAtTime(75, ctx.currentTime);
+        osc2.frequency.linearRampToValueAtTime(35, ctx.currentTime + 0.15);
+        gain2.gain.setValueAtTime(0.2, ctx.currentTime);
+        gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.17);
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        
+        osc1.start();
+        osc1.stop(ctx.currentTime + 0.25);
+        osc2.start();
+        osc2.stop(ctx.currentTime + 0.2);
+      } catch (e) {}
+      return;
+    }
+
     if (!this.initialized) this.init();
     if (this.muted) return;
 

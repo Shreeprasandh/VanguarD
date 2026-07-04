@@ -8,6 +8,8 @@ import GameOver from './components/GameOver';
 import { GameAudio } from './game/audio';
 import MenuBackground from './components/MenuBackground';
 import StoryModal from './components/StoryModal';
+import DockingStation from './components/DockingStation';
+import InfoPopup from './components/InfoPopup';
 
 export default function App() {
   // Profile settings (persisted in localStorage)
@@ -17,12 +19,21 @@ export default function App() {
   const [shipColor, setShipColor] = useState(() => {
     return localStorage.getItem('cybertype_color') || 'blue';
   });
+  const [equippedSkills, setEquippedSkills] = useState(() => {
+    try {
+      const saved = localStorage.getItem('cybertype_skills');
+      return saved ? JSON.parse(saved) : ['emp_discharge', 'overclock', 'nebula_veil'];
+    } catch(e) {
+      return ['emp_discharge', 'overclock', 'nebula_veil'];
+    }
+  });
 
   // App routing state
   const [screen, setScreen] = useState('menu'); // 'menu', 'lobby', 'playing', 'gameover'
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showStory, setShowStory] = useState(false);
+  const [showInfoPopup, setShowInfoPopup] = useState(false);
   const [muted, setMuted] = useState(false);
 
   // Multiplayer room state
@@ -128,6 +139,16 @@ export default function App() {
             case 'COLOR_ERROR':
               alert(data.message);
               break;
+
+            case 'INIT_DOCK':
+              setGameStats(prev => ({ ...prev, wave: data.wave }));
+              setScreen('docking');
+              break;
+
+            case 'LAUNCH_NEXT_WAVE':
+              setGameStats(prev => ({ ...prev, wave: prev.wave + 1 }));
+              setScreen('playing');
+              break;
           }
         } catch (e) {
           console.error('Error handling global socket message:', e);
@@ -153,9 +174,13 @@ export default function App() {
   }, []);
 
   // Update profile handler
-  const handleSaveProfile = (newUsername, newColor) => {
+  const handleSaveProfile = (newUsername, newColor, newSkills) => {
     setUsername(newUsername);
     setShipColor(newColor);
+    if (newSkills) {
+      setEquippedSkills(newSkills);
+      localStorage.setItem('cybertype_skills', JSON.stringify(newSkills));
+    }
     localStorage.setItem('cybertype_username', newUsername);
     localStorage.setItem('cybertype_color', newColor);
     setShowEditProfile(false);
@@ -164,7 +189,8 @@ export default function App() {
     if (socketRef.current && socketConnected) {
       socketRef.current.send(JSON.stringify({
         type: 'REGISTER',
-        username: newUsername
+        username: newUsername,
+        color: newColor
       }));
     }
   };
@@ -173,6 +199,28 @@ export default function App() {
     setIsMultiplayer(false);
     setGameStats({ score: 0, wave: 1 });
     setScreen('playing');
+  };
+
+  const handleDockStart = (completedWave) => {
+    setGameStats(prev => ({ ...prev, wave: completedWave }));
+    setScreen('docking');
+  };
+
+  const handleDockContinue = (newColor, newSkills) => {
+    setShipColor(newColor);
+    setEquippedSkills(newSkills);
+    localStorage.setItem('cybertype_color', newColor);
+    localStorage.setItem('cybertype_skills', JSON.stringify(newSkills));
+
+    if (isMultiplayer && socketRef.current && socketConnected) {
+      socketRef.current.send(JSON.stringify({
+        type: 'LAUNCH_NEXT_WAVE'
+      }));
+    } else {
+      const nextWave = gameStats.wave + 1;
+      setGameStats(prev => ({ ...prev, wave: nextWave }));
+      setScreen('playing');
+    }
   };
 
   const handleCreateRoom = () => {
@@ -263,12 +311,14 @@ export default function App() {
           <MainMenu
             username={username}
             shipColor={shipColor}
+            isMobileDevice={isMobileDevice}
             onStartSolo={handleStartSolo}
             onCreateRoom={handleCreateRoom}
             onJoinRoom={handleJoinRoom}
             onOpenLeaderboard={() => setShowLeaderboard(true)}
             onOpenEditProfile={() => setShowEditProfile(true)}
             onOpenStory={() => setShowStory(true)}
+            onOpenInfo={() => setShowInfoPopup(true)}
           />
         );
 
@@ -303,6 +353,23 @@ export default function App() {
             muted={muted}
             onToggleMute={toggleMute}
             onQuitToMenu={handleReturnMenu}
+            equippedSkills={equippedSkills}
+            initialWave={gameStats.wave}
+            initialScore={gameStats.score}
+            onDockStart={handleDockStart}
+          />
+        );
+
+      case 'docking':
+        return (
+          <DockingStation
+            shipColor={shipColor}
+            equippedSkills={equippedSkills}
+            isMultiplayer={isMultiplayer}
+            players={players}
+            socket={socketRef.current}
+            wave={gameStats.wave}
+            onContinue={handleDockContinue}
           />
         );
 
@@ -324,48 +391,12 @@ export default function App() {
 
   return (
     <div className="app-container">
-      {/* Keyboard Requirement Blocker for Phones/Tablets */}
-      {isMobileDevice && (
-        <div 
-          className="modal-overlay" 
-          style={{ 
-            background: '#05050a', 
-            zIndex: 99999, 
-            display: 'flex', 
-            flexDirection: 'column', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            padding: '2rem', 
-            textAlign: 'center' 
-          }}
-        >
-          <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', maxWidth: '440px', padding: '1rem' }}>
-            {/* Red alert corner brackets */}
-            <div style={{ position: 'absolute', top: '-15px', left: '-20px', width: '24px', height: '8px', borderTop: '1px solid var(--neon-red)', borderLeft: '1px solid var(--neon-red)' }} />
-            <div style={{ position: 'absolute', top: '-15px', right: '-20px', width: '24px', height: '8px', borderTop: '1px solid var(--neon-red)', borderRight: '1px solid var(--neon-red)' }} />
-            
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.25rem', color: 'var(--neon-red)', letterSpacing: '4px', textTransform: 'uppercase', marginBottom: '1.5rem' }}>
-              KEYBOARD REQUIRED
-            </div>
-            
-            <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.95rem', lineHeight: '1.7', color: '#dcdfe8', marginBottom: '2.2rem', fontWeight: 300 }}>
-              VanguarD tactical matrices require a physical keyboard connection to synchronize defensive targeting grids. Handheld touch terminals are not supported.
-            </p>
 
-            <div style={{ fontSize: '0.72rem', fontFamily: 'var(--font-display)', color: 'var(--text-secondary)', opacity: 0.5, letterSpacing: '2.5px' }}>
-              CONNECT COMPATIBLE INTERFACE
-            </div>
-
-            <div style={{ position: 'absolute', bottom: '-15px', left: '-20px', width: '24px', height: '8px', borderBottom: '1px solid var(--neon-red)', borderLeft: '1px solid var(--neon-red)' }} />
-            <div style={{ position: 'absolute', bottom: '-15px', right: '-20px', width: '24px', height: '8px', borderBottom: '1px solid var(--neon-red)', borderRight: '1px solid var(--neon-red)' }} />
-          </div>
-        </div>
-      )}
 
       {/* Background canvas visuals for main menu */}
-      {screen !== 'playing' && <MenuBackground />}
+      {screen !== 'playing' && <MenuBackground shipColor={shipColor} />}
 
-      {/* Global Sound Toggle - Hide during play mode (GameCanvas renders its own grouped controls) */}
+      {/* Global Sound & Info Actions - Hide during play mode (GameCanvas renders its own grouped controls) */}
       {screen !== 'playing' && (
         <div className="system-actions">
           <button 
@@ -380,6 +411,18 @@ export default function App() {
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
             )}
           </button>
+          <button 
+            className="system-btn" 
+            onClick={() => { GameAudio.play('click'); setShowInfoPopup(true); }} 
+            title="Diagnostic Manual / Rules"
+            style={{ opacity: 0.35 }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+          </button>
         </div>
       )}
 
@@ -391,6 +434,7 @@ export default function App() {
         <ProfileEdit
           initialUsername={username}
           initialColor={shipColor}
+          initialSkills={equippedSkills}
           onSave={handleSaveProfile}
           onCancel={() => setShowEditProfile(false)}
         />
@@ -408,6 +452,13 @@ export default function App() {
       {showStory && (
         <StoryModal
           onClose={() => setShowStory(false)}
+        />
+      )}
+
+      {/* Diagnostic Manual Info overlay */}
+      {showInfoPopup && (
+        <InfoPopup
+          onClose={() => setShowInfoPopup(false)}
         />
       )}
     </div>

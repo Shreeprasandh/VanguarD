@@ -4,19 +4,45 @@ export default function Leaderboard({ leaderboard, onClose }) {
   return (
     <div className="modal-overlay" onClick={onClose} style={{ background: 'rgba(0, 0, 0, 0.9)', backdropFilter: 'blur(10px)', zIndex: 1000 }}>
       <div 
+        className="glass-panel"
         onClick={(e) => e.stopPropagation()}
         style={{ 
+          position: 'relative',
           maxWidth: '520px',
-          width: '100%',
-          background: 'transparent',
-          border: 'none',
-          boxShadow: 'none',
-          padding: '2rem 1rem',
+          width: '90%',
+          background: 'rgba(5, 5, 8, 0.98)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          padding: '2.5rem 1.8rem',
+          borderRadius: '4px',
+          boxShadow: '0 25px 60px rgba(0, 0, 0, 0.95)',
           textAlign: 'center',
           animation: 'fadeIn 0.3s ease-out'
         }}
       >
+        {/* Futuristic Aesthetic Corner Brackets */}
+        <div style={{ position: 'absolute', top: '10px', left: '10px', width: '15px', height: '15px', borderTop: '2px solid rgba(255, 255, 255, 0.25)', borderLeft: '2px solid rgba(255, 255, 255, 0.25)' }} />
+        <div style={{ position: 'absolute', top: '10px', right: '10px', width: '15px', height: '15px', borderTop: '2px solid rgba(255, 255, 255, 0.25)', borderRight: '2px solid rgba(255, 255, 255, 0.25)' }} />
+        <div style={{ position: 'absolute', bottom: '10px', left: '10px', width: '15px', height: '15px', borderBottom: '2px solid rgba(255, 255, 255, 0.25)', borderLeft: '2px solid rgba(255, 255, 255, 0.25)' }} />
+        <div style={{ position: 'absolute', bottom: '10px', right: '10px', width: '15px', height: '15px', borderBottom: '2px solid rgba(255, 255, 255, 0.25)', borderRight: '2px solid rgba(255, 255, 255, 0.25)' }} />
+
         <style>{`
+          @media (max-width: 480px) {
+            .glass-panel {
+              padding: 1.5rem 1.2rem !important;
+              width: 95% !important;
+            }
+            .leaderboard-title {
+              font-size: 1.2rem !important;
+              margin-bottom: 1.2rem !important;
+            }
+            .lb-row {
+              font-size: 0.82rem !important;
+              padding: 0.6rem 0.3rem !important;
+            }
+            .btn-lb-close {
+              margin-top: 1.8rem !important;
+            }
+          }
           .leaderboard-title {
             font-family: var(--font-display);
             font-size: 1.6rem;
