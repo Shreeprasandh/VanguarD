@@ -175,6 +175,16 @@ export default function MenuBackground({ shipColor = 'blue' }) {
         vx: -0.004,
         vy: 0.005,
         opacity: 0.09
+      },
+      // 11. Small Planet (Right Center) - Close
+      {
+        type: 'small_planet',
+        x: window.innerWidth * 0.85,
+        y: window.innerHeight * 0.5,
+        radius: 14,
+        vx: -0.005,
+        vy: -0.005,
+        opacity: 0.09
       }
     ];
 
@@ -452,6 +462,19 @@ export default function MenuBackground({ shipColor = 'blue' }) {
           // Bottom antenna dish
           ctx.beginPath();
           ctx.arc(obj.x, obj.y + 12, 4, 0, Math.PI);
+          ctx.stroke();
+        } else if (obj.type === 'small_planet') {
+          // Small sphere
+          ctx.beginPath();
+          ctx.arc(obj.x, obj.y, obj.radius || 12, 0, Math.PI * 2);
+          ctx.stroke();
+          // Diagonal shaded lines
+          ctx.beginPath();
+          ctx.arc(obj.x, obj.y, (obj.radius || 12) - 2.5, Math.PI * 0.25, Math.PI * 0.95);
+          ctx.stroke();
+          // Small surface crater
+          ctx.beginPath();
+          ctx.arc(obj.x - 3, obj.y - 3, 2, 0, Math.PI * 2);
           ctx.stroke();
         } else if (obj.type === 'wreckage') {
           // Swept wing panels
