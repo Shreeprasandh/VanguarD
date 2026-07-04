@@ -229,13 +229,6 @@ wss.on('connection', (ws) => {
           if (!room) break;
 
           const chosenColor = data.color; // 'red', 'blue', 'green'
-          
-          // Check if color already taken
-          const isTaken = room.players.some(p => p.color === chosenColor);
-          if (isTaken) {
-            ws.send(JSON.stringify({ type: 'COLOR_ERROR', message: 'Color already chosen.' }));
-            break;
-          }
 
           const roomPlayer = room.players.find(p => p.socketId === socketId);
           if (roomPlayer) {
@@ -258,6 +251,12 @@ wss.on('connection', (ws) => {
           const anyMissingColor = room.players.some(p => !p.color);
           if (anyMissingColor && room.players.length > 1) {
             ws.send(JSON.stringify({ type: 'ROOM_ERROR', message: 'All players must choose a color first.' }));
+            break;
+          }
+          const colors = room.players.map(p => p.color).filter(Boolean);
+          const hasDuplicates = new Set(colors).size !== colors.length;
+          if (hasDuplicates && room.players.length > 1) {
+            ws.send(JSON.stringify({ type: 'ROOM_ERROR', message: 'All players must choose unique colors.' }));
             break;
           }
 
