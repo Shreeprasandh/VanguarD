@@ -90,6 +90,7 @@ export default function GameCanvas({
     multiplier: 1,
     wave: 1,
     health: 100,
+    defPercent: 0,
     teammates: []
   });
 
@@ -448,6 +449,12 @@ export default function GameCanvas({
     const state = stateRef.current;
     let scoreGained = 10 * state.multiplier + (enemy.word ? enemy.word.length * 5 * state.multiplier : 0);
     
+    if (enemy.type === 'anomaly') {
+      state.charge = Math.min(100, state.charge + 25);
+      setCharge(state.charge);
+      scoreGained += 1000;
+    }
+
     state.activeWordId = null;
     createExplosion(enemy.x, enemy.y, getColorHex(enemy.color), 22, true);
     GameAudio.play('explosion');
@@ -804,6 +811,7 @@ export default function GameCanvas({
       // We have an active target
       const enemy = state.enemies.find(e => e.id === state.activeWordId);
       if (enemy) {
+        if (enemy.isInvulnerable) return; // Linked target is invulnerable!
         const nextChar = enemy.word[enemy.targetIndex].toLowerCase();
         if (char === nextChar) {
           // If Overclock is active, hit 2 letters!
@@ -821,6 +829,7 @@ export default function GameCanvas({
             // Miss resets streak & multiplier if stabilizer is not running
             if (state.stabilizerTime <= 0) {
               state.streak = 0;
+              updateStreakShield(0);
               state.multiplier = 1;
               setHudState(prev => ({ ...prev, multiplier: 1 }));
             }
@@ -845,7 +854,7 @@ export default function GameCanvas({
     const eligibleEnemies = state.enemies.filter(e => {
       const matchesColor = !isMultiplayer || e.color === shipColor;
       const startsWithChar = e.word[0].toLowerCase() === char;
-      return matchesColor && startsWithChar && e.targetIndex === 0;
+      return matchesColor && startsWithChar && e.targetIndex === 0 && !e.isInvulnerable;
     });
 
     if (eligibleEnemies.length === 0) {
@@ -855,6 +864,7 @@ export default function GameCanvas({
       } else {
         if (state.stabilizerTime <= 0) {
           state.streak = 0;
+          updateStreakShield(0);
           state.multiplier = 1;
           setHudState(prev => ({ ...prev, multiplier: 1 }));
         }
@@ -885,6 +895,7 @@ export default function GameCanvas({
     
     // Increment streak/multiplier
     state.streak += 1;
+    updateStreakShield(state.streak);
     if (state.streak % 10 === 0 && state.multiplier < 5) {
       state.multiplier += 1;
       setHudState(prev => ({ ...prev, multiplier: state.multiplier }));
@@ -903,7 +914,13 @@ export default function GameCanvas({
 
     const charOffset = charIndex * 14; // Font spacing approximation
     const wordWidth = enemy.word.length * 14;
-    const startX = enemy.x - wordWidth / 2;
+    
+    let gravOffset = 0;
+    if (state.bossObj && state.wave === 50) {
+      gravOffset = Math.sin(Date.now() / 220 + enemy.y * 0.015) * 22;
+    }
+    
+    const startX = enemy.x + gravOffset - wordWidth / 2;
     const letterX = startX + charOffset + 7;
     const letterY = enemy.y;
 
@@ -989,6 +1006,16 @@ export default function GameCanvas({
     if (!canvas || state.isLocalGameOver) return;
 
     if (state.isPaused) return;
+
+    // Gradual health regeneration over time (0.5 HP per second)
+    if (state.health < 100 && state.health > 0) {
+      state.health = Math.min(100, state.health + (0.5 / 60)); // 0.5 HP/s at 60fps
+      state.regenHudTimer = (state.regenHudTimer || 0) + 1;
+      if (state.regenHudTimer >= 15) {
+        state.regenHudTimer = 0;
+        setHudState(prev => ({ ...prev, health: Math.round(state.health) }));
+      }
+    }
 
     // Decrement skill status clocks
     state.empFreezeTime = Math.max(0, state.empFreezeTime - 16.7);
@@ -1116,6 +1143,10 @@ export default function GameCanvas({
       state.waveTransitionTimer -= 1;
       if (state.waveTransitionTimer <= 0) {
         state.waveState = 'playing';
+        state.meteorShowerTriggered = false; // Reset meteor shower status
+        if (isPrime(state.wave) && state.wave % 10 !== 0) {
+          spawnAnomalyMiniBoss();
+        }
       }
       return; // Skip spawning and enemy progression during intro banner
     }
@@ -1124,6 +1155,23 @@ export default function GameCanvas({
     const isHost = !isMultiplayer || (players.find(p => p.socketId === socket?.id)?.isHost);
     
     if (isHost && state.waveState === 'playing') {
+      // Random Meteor Shower trigger logic
+      if (!state.bossObj && state.wave % 10 !== 0 && !isPrime(state.wave)) {
+        if (!state.meteorShowerTriggered && Math.random() < 0.0007) {
+          state.meteorShowerTriggered = true;
+          state.meteorShowerWarningTimer = 180; // 3 seconds warning alert
+          GameAudio.play('emp');
+        }
+      }
+
+      // Handle Meteor warning timer countdown
+      if (state.meteorShowerWarningTimer && state.meteorShowerWarningTimer > 0) {
+        state.meteorShowerWarningTimer -= 1;
+        if (state.meteorShowerWarningTimer <= 0) {
+          spawnMeteors();
+        }
+      }
+
       const now = Date.now();
       const spawnInterval = state.wave >= 100 ? 100 : Math.max(1200, 3200 - state.wave * 150); // Spawning speed scales up
       const totalToSpawn = state.wave >= 100 ? 999999 : state.waveTotalToSpawn;
@@ -1135,8 +1183,8 @@ export default function GameCanvas({
 
       // Check if all wave enemies spawned and cleared
       if (state.waveSpawnedCount >= state.waveTotalToSpawn && state.enemies.length === 0 && state.bullets.length === 0) {
-        // Trigger Boss Fight on every prime wave (2, 3, 5, 7, 11...)
-        if (isPrime(state.wave)) {
+        // Trigger Dreadnought Boss Fight on every 10th wave, or wave 100
+        if (state.wave % 10 === 0 || state.wave === 100) {
           triggerBossWarning();
         } else {
           // Go to next wave or docking station
@@ -1162,11 +1210,46 @@ export default function GameCanvas({
       }
     }
 
+    // Shield Linker behavior: link to another enemy ship
+    state.enemies.forEach(e => { e.isInvulnerable = false; });
+    state.enemies.forEach(e => {
+      if (e.type === 'shield_linker') {
+        if (!e.shieldLinkedEnemyId || !state.enemies.some(target => target.id === e.shieldLinkedEnemyId)) {
+          // Find a target that is NOT a linker, boss, or anomaly
+          const candidates = state.enemies.filter(cand => cand.id !== e.id && cand.type !== 'shield_linker' && cand.type !== 'boss' && cand.type !== 'anomaly');
+          if (candidates.length > 0) {
+            e.shieldLinkedEnemyId = candidates[Math.floor(Math.random() * candidates.length)].id;
+          } else {
+            e.shieldLinkedEnemyId = null;
+          }
+        }
+        if (e.shieldLinkedEnemyId) {
+          const target = state.enemies.find(cand => cand.id === e.shieldLinkedEnemyId);
+          if (target) {
+            target.isInvulnerable = true;
+          }
+        }
+      }
+    });
+
     // Enemies movement
     const baseSpeedMultiplier = state.wave >= 100 ? 8.5 : (1.0 + (state.wave * 0.08)); // Speed scales up with waves
     const multiplayerDifficulty = isMultiplayer ? 1.25 : 1.0; // 25% harder as requested
     
     state.enemies.forEach(enemy => {
+      // Kamikaze timer ticking
+      if (enemy.type === 'kamikaze') {
+        enemy.kamikazeTimer = (enemy.kamikazeTimer !== undefined ? enemy.kamikazeTimer : 240) - 1; // 4 seconds
+        if (enemy.kamikazeTimer <= 0) {
+          takeDamage(35);
+          state.enemies = state.enemies.filter(e => e.id !== enemy.id);
+          if (state.activeWordId === enemy.id) state.activeWordId = null;
+          createExplosion(enemy.x, enemy.y, '#ef4444', 30, true);
+          GameAudio.play('explosionLarge');
+          return;
+        }
+      }
+
       // Decrement status timers
       if (enemy.freezeTime > 0) enemy.freezeTime -= 16.7;
       if (enemy.slowTime > 0) enemy.slowTime -= 16.7;
@@ -1214,7 +1297,15 @@ export default function GameCanvas({
       if (state.chronosDriveTime > 0) {
         bulletFactor = 0.3;
       }
-      bullet.y += bullet.speed * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor;
+      
+      let speedFactor = 1.0;
+      if (bullet.type === 'temporal') {
+        speedFactor = 0.35 + Math.sin(Date.now() / 140 + bullet.y * 0.04) * 0.65;
+      }
+
+      if (bullet.vx === undefined || bullet.vy === undefined) {
+        bullet.y += bullet.speed * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor;
+      }
 
       // Hit bottom check
       const thresholdY = canvas.height - 100;
@@ -1233,12 +1324,67 @@ export default function GameCanvas({
           createExplosion(bullet.x, bullet.y, '#a3e635', 15, true);
           state.bullets = state.bullets.filter(b => b.id !== bullet.id);
         } else {
-          // Bullet hit a ship -> Instant Game Over as requested
-          takeDamage(100); // Triggers death instantly
+          // Bullet hit a ship -> 50 damage (2-hit survival limit)
+          takeDamage(50);
           state.bullets = state.bullets.filter(b => b.id !== bullet.id);
         }
       }
     });
+  };
+
+  const spawnAnomalyMiniBoss = () => {
+    const state = stateRef.current;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    // Only spawn once per prime level!
+    if (state.enemies.some(e => e.type === 'anomaly')) return;
+    
+    const word = getWordForEnemy('anomaly', state.wave, state.usedWords);
+    const enemyId = 'anomaly';
+    
+    state.enemies.push({
+      id: enemyId,
+      word,
+      wordQueue: [],
+      color: 'purple',
+      x: canvas.width / 2,
+      y: 120, // hover at upper height
+      speed: 0.05,
+      targetIndex: 0,
+      type: 'anomaly',
+      shootCooldown: 140
+    });
+    
+    state.anomalyWarningTimer = 180; // 3 seconds banner alert
+    GameAudio.play('emp'); // alert sound
+  };
+
+  const spawnMeteors = () => {
+    const state = stateRef.current;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const count = 4 + Math.floor(Math.random() * 3); // 4 to 6 meteors
+    const chars = 'abcdefghijklmnopqrstuvwxyz';
+    
+    for (let i = 0; i < count; i++) {
+      const char = chars[Math.floor(Math.random() * chars.length)];
+      const x = canvas.width * 0.15 + Math.random() * (canvas.width * 0.7);
+      const speed = 2.0 + Math.random() * 1.5;
+      
+      state.enemies.push({
+        id: `meteor-${Math.random().toString(36).substring(2, 9)}`,
+        word: char,
+        wordQueue: [],
+        color: '#ff781e',
+        x,
+        y: -50 - (i * 45),
+        speed,
+        targetIndex: 0,
+        type: 'meteor'
+      });
+    }
   };
 
   // Host spawns standard wave enemies
@@ -1261,13 +1407,19 @@ export default function GameCanvas({
       let hp = 1;
       
       const rng = Math.random();
-      if (state.wave >= 2 && rng > 0.75) {
-        type = 'interceptor'; // Elite
-        speed = 0.9 + Math.random() * 0.4;
-      } else if (state.wave >= 4 && rng > 0.90) {
+      if (state.wave >= 5 && rng > 0.92) {
+        type = 'shield_linker';
+        speed = 0.4 + Math.random() * 0.15;
+      } else if (state.wave >= 4 && rng > 0.82) {
         type = 'cruiser'; // General
         speed = 0.3 + Math.random() * 0.2;
         hp = 2;
+      } else if (state.wave >= 3 && rng > 0.70) {
+        type = 'kamikaze';
+        speed = 1.3 + Math.random() * 0.3;
+      } else if (state.wave >= 2 && rng > 0.50) {
+        type = 'interceptor'; // Elite
+        speed = 0.9 + Math.random() * 0.4;
       }
 
       if (state.wave >= 100) {
@@ -1302,6 +1454,8 @@ export default function GameCanvas({
         if (type === 'drone') color = 'orange';
         else if (type === 'interceptor') color = 'magenta';
         else if (type === 'cruiser') color = 'gold';
+        else if (type === 'kamikaze') color = 'red';
+        else if (type === 'shield_linker') color = 'blue';
         else color = 'purple';
       }
 
@@ -1483,19 +1637,45 @@ export default function GameCanvas({
     // Calculate bullet velocities to shoot towards ship
     const startX = state.bossObj.x;
     const startY = state.bossObj.y + 40;
-    const angle = Math.atan2(window.innerHeight - 80 - startY, destX - startX);
+    const baseAngle = Math.atan2(window.innerHeight - 80 - startY, destX - startX);
 
-    const bullet = {
-      id: bulletId,
-      letter,
-      x: startX,
-      y: startY,
-      speed: 1.8,
-      vx: Math.cos(angle) * 2,
-      vy: Math.sin(angle) * 2
-    };
-
-    state.bullets.push(bullet);
+    // Void Emperor (Wave 100) fires a triple spread of letter bullets
+    if (state.wave >= 100) {
+      const angles = [baseAngle - 0.22, baseAngle, baseAngle + 0.22];
+      angles.forEach((angle, idx) => {
+        const bId = bulletId + '-' + idx;
+        const bLetter = alphabet[Math.floor(Math.random() * alphabet.length)];
+        const bSpeed = 2.2;
+        
+        state.bullets.push({
+          id: bId,
+          letter: bLetter,
+          x: startX,
+          y: startY,
+          speed: bSpeed,
+          vx: Math.cos(angle) * bSpeed,
+          vy: Math.sin(angle) * bSpeed,
+          type: 'boss_spiral'
+        });
+      });
+    } else {
+      // Standard or Chronos Temporal Bullet
+      const isTemporal = state.wave === 20;
+      const bSpeed = isTemporal ? 1.4 : 1.8;
+      
+      const bullet = {
+        id: bulletId,
+        letter,
+        x: startX,
+        y: startY,
+        speed: bSpeed,
+        vx: Math.cos(baseAngle) * bSpeed,
+        vy: Math.sin(baseAngle) * bSpeed,
+        type: isTemporal ? 'temporal' : 'boss_standard'
+      };
+      
+      state.bullets.push(bullet);
+    }
 
     if (isMultiplayer && socket) {
       socket.send(JSON.stringify({
@@ -1512,15 +1692,27 @@ export default function GameCanvas({
     const canvas = canvasRef.current;
     if (!canvas || !state.bossObj) return;
 
-    const word = getWordForEnemy('drone', state.wave, state.usedWords);
-    const id = Math.random().toString(36).substring(2, 9);
     const spawnLeft = Math.random() < 0.5;
     const x = spawnLeft ? state.bossObj.x - 80 : state.bossObj.x + 80;
+
+    let type = 'drone';
+    let speed = 0.7;
+    
+    if (state.wave === 40) {
+      type = Math.random() < 0.6 ? 'kamikaze' : 'shield_linker';
+      speed = type === 'kamikaze' ? 1.4 : 0.45;
+    }
+
+    const word = getWordForEnemy(type, state.wave, state.usedWords);
+    const id = Math.random().toString(36).substring(2, 9);
 
     let color = shipColor;
     if (isMultiplayer && players) {
       const colors = players.map(p => p.color).filter(Boolean);
       color = colors[Math.floor(Math.random() * colors.length)] || shipColor;
+    } else {
+      if (type === 'kamikaze') color = 'red';
+      else if (type === 'shield_linker') color = 'blue';
     }
 
     const minion = {
@@ -1529,9 +1721,9 @@ export default function GameCanvas({
       color,
       x,
       y: state.bossObj.y + 40,
-      speed: 0.7,
+      speed,
       targetIndex: 0,
-      type: 'drone'
+      type
     };
 
     state.enemies.push(minion);
@@ -1564,12 +1756,26 @@ export default function GameCanvas({
       return; // Prevent damage from reducing player health!
     }
 
-    state.health = Math.max(0, state.health - amount);
+    // Calculate streak damage reduction
+    let dmgReduction = 0;
+    if (state.streak >= 50) dmgReduction = 0.50;
+    else if (state.streak >= 40) dmgReduction = 0.40;
+    else if (state.streak >= 30) dmgReduction = 0.30;
+    else if (state.streak >= 20) dmgReduction = 0.20;
+    else if (state.streak >= 10) dmgReduction = 0.10;
+
+    const finalAmount = amount * (1 - dmgReduction);
+    state.health = Math.max(0, state.health - finalAmount);
+    
+    // Reset streak upon taking damage
+    state.streak = 0;
+    updateStreakShield(0);
+
     state.screenShake = 12;
     state.flashFrame = 4;
     GameAudio.play('explosionPlayer');
 
-    setHudState(prev => ({ ...prev, health: state.health }));
+    setHudState(prev => ({ ...prev, health: Math.round(state.health) }));
 
     if (isMultiplayer && socket) {
       socket.send(JSON.stringify({
@@ -1615,6 +1821,8 @@ export default function GameCanvas({
   // Advance level/wave
   const advanceNextWave = () => {
     const state = stateRef.current;
+    if (state.wave >= 100) return; // Wave 100 is the final impossible level
+    
     const nextWaveNum = state.wave + 1;
     
     state.wave = nextWaveNum;
@@ -1659,6 +1867,19 @@ export default function GameCanvas({
       boss.words[shieldIndex].completed = true;
 
       // Update boss general health percentage
+      if (state.wave >= 100) {
+        boss.health = 100;
+        // Spark explosion on boss
+        createExplosion(boss.x, boss.y, getColorHex(boss.words[shieldIndex].color), 30, true);
+        // Regenerate this word slot with a fresh target word so it continues endlessly
+        boss.words[shieldIndex].completed = false;
+        boss.words[shieldIndex].word = getWordForEnemy('boss', state.wave, state.usedWords);
+        boss.words[shieldIndex].targetIndex = 0;
+        boss.words[shieldIndex].active = true;
+        loadBossWordsAsEnemies(boss.words);
+        return;
+      }
+
       const completedCount = boss.words.filter(w => w.completed).length;
       boss.health = Math.round(100 - (completedCount / boss.words.length) * 100);
 
@@ -1937,70 +2158,232 @@ export default function GameCanvas({
       ctx.save();
       ctx.translate(boss.x, boss.y);
       ctx.shadowBlur = 15;
-      ctx.shadowColor = getColorHex('purple');
-      ctx.strokeStyle = getColorHex('purple');
+      
+      const bossTier = state.wave; // e.g. 10, 20, 30...
+      let bossColor = 'purple';
+      let bossLabel = 'COMMAND DREADNOUGHT';
+
+      if (bossTier === 10) {
+        bossColor = 'purple';
+        bossLabel = 'DREADNOUGHT SENTINEL';
+      } else if (bossTier === 20) {
+        bossColor = 'blue';
+        bossLabel = 'CHRONOS DOMINATOR';
+      } else if (bossTier === 30) {
+        bossColor = 'magenta';
+        bossLabel = 'PLASMA LEVIATHAN';
+      } else if (bossTier === 40) {
+        bossColor = 'gold';
+        bossLabel = 'HYPERION CARRIER';
+      } else if (bossTier === 50) {
+        bossColor = 'purple';
+        bossLabel = 'SINGULARITY VOID';
+      } else if (bossTier >= 100) {
+        bossColor = 'red';
+        bossLabel = 'VOID EMPEROR [FINAL]';
+      } else {
+        bossColor = 'purple';
+        bossLabel = 'IMPERIAL OVERLORD';
+      }
+
+      ctx.shadowColor = getColorHex(bossColor);
+      ctx.strokeStyle = getColorHex(bossColor);
       ctx.lineWidth = 3.0;
 
-      // Draw massive procedural boss command fortress
-      ctx.beginPath();
-      ctx.moveTo(-boss.width / 2, -boss.height / 3);
-      ctx.lineTo(-boss.width * 0.3, -boss.height / 2);
-      ctx.lineTo(boss.width * 0.3, -boss.height / 2);
-      ctx.lineTo(boss.width / 2, -boss.height / 3);
-      ctx.lineTo(boss.width * 0.45, boss.height * 0.25);
-      ctx.lineTo(boss.width * 0.25, boss.height * 0.5);
-      ctx.lineTo(boss.width * 0.1, boss.height * 0.35);
-      ctx.lineTo(-boss.width * 0.1, boss.height * 0.35);
-      ctx.lineTo(-boss.width * 0.25, boss.height * 0.5);
-      ctx.lineTo(-boss.width * 0.45, boss.height * 0.25);
-      ctx.closePath();
-      
-      // Semitransparent fill for mass and visibility
-      ctx.fillStyle = 'rgba(139, 92, 246, 0.08)';
-      ctx.fill();
-      ctx.stroke();
+      // Draw custom visual designs based on boss type
+      if (bossTier === 20) {
+        // Chronos Dominator
+        const rot = Date.now() * 0.001;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, boss.width * 0.45, boss.height * 0.45, rot, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.ellipse(0, 0, boss.width * 0.3, boss.height * 0.15, -rot * 1.5, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Core hourglass
+        ctx.beginPath();
+        ctx.moveTo(-12, -22); ctx.lineTo(12, -22);
+        ctx.lineTo(-12, 22); ctx.lineTo(12, 22);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.1)';
+        ctx.fill();
+        ctx.stroke();
+      } else if (bossTier === 30) {
+        // Plasma Leviathan
+        // If cloaked phase, fade global alpha
+        const cloakCycle = Math.sin(Date.now() / 150) * 0.5 + 0.5;
+        ctx.globalAlpha = 0.12 + cloakCycle * 0.8;
+        
+        ctx.beginPath();
+        ctx.moveTo(0, -boss.height / 2);
+        ctx.lineTo(boss.width / 2, boss.height / 3);
+        ctx.lineTo(-boss.width / 2, boss.height / 3);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(219, 39, 119, 0.08)';
+        ctx.fill();
+        ctx.stroke();
 
-      // Draw secondary layered plate armor contours and panels (detailed!)
-      ctx.strokeStyle = 'rgba(139, 92, 246, 0.35)';
-      ctx.lineWidth = 1.0;
-      ctx.beginPath();
-      // Outer armor plate left
-      ctx.moveTo(-boss.width * 0.4, -boss.height * 0.1);
-      ctx.lineTo(-boss.width * 0.4, boss.height * 0.15);
-      ctx.lineTo(-boss.width * 0.25, boss.height * 0.35);
-      // Outer armor plate right
-      ctx.moveTo(boss.width * 0.4, -boss.height * 0.1);
-      ctx.lineTo(boss.width * 0.4, boss.height * 0.15);
-      ctx.lineTo(boss.width * 0.25, boss.height * 0.35);
-      // Center command deck tower
-      ctx.rect(-boss.width * 0.15, -boss.height * 0.35, boss.width * 0.3, boss.height * 0.15);
-      ctx.stroke();
+        // Pulsing plasma core lines
+        ctx.strokeStyle = `rgba(219, 39, 119, ${0.3 + cloakCycle * 0.5})`;
+        ctx.beginPath();
+        ctx.moveTo(0, -boss.height / 2); ctx.lineTo(0, boss.height / 3);
+        ctx.moveTo(-boss.width * 0.25, 0); ctx.lineTo(boss.width * 0.25, 0);
+        ctx.stroke();
+      } else if (bossTier === 40) {
+        // Hyperion Carrier
+        ctx.beginPath();
+        ctx.rect(-boss.width / 2, -boss.height / 2, boss.width, boss.height);
+        ctx.fillStyle = 'rgba(217, 167, 82, 0.08)';
+        ctx.fill();
+        ctx.stroke();
+        
+        // Hangar flight decks
+        ctx.strokeRect(-boss.width / 2 + 10, -boss.height / 3, 30, boss.height * 0.6);
+        ctx.strokeRect(boss.width / 2 - 40, -boss.height / 3, 30, boss.height * 0.6);
+      } else if (bossTier === 50) {
+        // Singularity Void
+        const rot = Date.now() * 0.0035;
+        
+        // Dark black hole sphere core
+        ctx.fillStyle = 'rgba(6, 6, 10, 0.95)';
+        ctx.beginPath();
+        ctx.arc(0, 0, 36, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        
+        // Gravity accretion disks orbits
+        ctx.beginPath();
+        ctx.ellipse(0, 0, boss.width * 0.55, boss.height * 0.25, rot, 0, Math.PI * 2);
+        ctx.ellipse(0, 0, boss.width * 0.55, boss.height * 0.25, -rot * 0.8, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (bossTier >= 100) {
+        // Void Emperor - Colossal Wings
+        ctx.beginPath();
+        // Wing Left
+        ctx.moveTo(0, -10);
+        ctx.lineTo(-boss.width * 1.6, -boss.height / 2);
+        ctx.lineTo(-boss.width * 1.8, boss.height / 4);
+        ctx.lineTo(-boss.width * 0.6, boss.height / 3);
+        ctx.lineTo(0, 10);
+        // Wing Right
+        ctx.moveTo(0, -10);
+        ctx.lineTo(boss.width * 1.6, -boss.height / 2);
+        ctx.lineTo(boss.width * 1.8, boss.height / 4);
+        ctx.lineTo(boss.width * 0.6, boss.height / 3);
+        ctx.lineTo(0, 10);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.12)';
+        ctx.fill();
+        ctx.stroke();
 
-      // Command bridge glowing console window
-      ctx.fillStyle = '#cf4042';
-      ctx.fillRect(-boss.width * 0.08, -boss.height * 0.3, boss.width * 0.16, 2);
+        // Glowing core spikes
+        ctx.strokeStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.moveTo(-15, 10); ctx.lineTo(-45, 55);
+        ctx.moveTo(15, 10); ctx.lineTo(45, 55);
+        ctx.moveTo(0, 15); ctx.lineTo(0, 65);
+        ctx.stroke();
+        
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.arc(0, 10, 16, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // Sentinel & dreadnought chassis (Default / Tier 10)
+        ctx.beginPath();
+        ctx.moveTo(-boss.width / 2, -boss.height / 3);
+        ctx.lineTo(-boss.width * 0.3, -boss.height / 2);
+        ctx.lineTo(boss.width * 0.3, -boss.height / 2);
+        ctx.lineTo(boss.width / 2, -boss.height / 3);
+        ctx.lineTo(boss.width * 0.45, boss.height * 0.25);
+        ctx.lineTo(boss.width * 0.25, boss.height * 0.5);
+        ctx.lineTo(boss.width * 0.1, boss.height * 0.35);
+        ctx.lineTo(-boss.width * 0.1, boss.height * 0.35);
+        ctx.lineTo(-boss.width * 0.25, boss.height * 0.5);
+        ctx.lineTo(-boss.width * 0.45, boss.height * 0.25);
+        ctx.closePath();
+        
+        ctx.fillStyle = 'rgba(139, 92, 246, 0.08)';
+        ctx.fill();
+        ctx.stroke();
 
-      // Draw boss health bar
+        ctx.strokeStyle = 'rgba(139, 92, 246, 0.35)';
+        ctx.lineWidth = 1.0;
+        ctx.beginPath();
+        ctx.moveTo(-boss.width * 0.4, -boss.height * 0.1);
+        ctx.lineTo(-boss.width * 0.4, boss.height * 0.15);
+        ctx.lineTo(-boss.width * 0.25, boss.height * 0.35);
+        ctx.moveTo(boss.width * 0.4, -boss.height * 0.1);
+        ctx.lineTo(boss.width * 0.4, boss.height * 0.15);
+        ctx.lineTo(boss.width * 0.25, boss.height * 0.35);
+        ctx.rect(-boss.width * 0.15, -boss.height * 0.35, boss.width * 0.3, boss.height * 0.15);
+        ctx.stroke();
+
+        ctx.fillStyle = '#cf4042';
+        ctx.fillRect(-boss.width * 0.08, -boss.height * 0.3, boss.width * 0.16, 2);
+      }
+
+      // Draw health bar
       const barW = 200;
       const barH = 6;
       ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
       ctx.fillRect(-barW / 2, -boss.height / 2 - 25, barW, barH);
-      ctx.fillStyle = getColorHex('purple');
+      ctx.fillStyle = getColorHex(bossColor);
       ctx.fillRect(-barW / 2, -boss.height / 2 - 25, barW * (boss.health / 100), barH);
 
       // Label "BOSS"
       ctx.fillStyle = '#ffffff';
       ctx.font = '700 12px Orbitron, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('COMMAND DREADNOUGHT', 0, -boss.height / 2 - 35);
+      ctx.fillText(bossLabel, 0, -boss.height / 2 - 35);
 
       ctx.restore();
     }
 
+    // Draw Shield-Linker linking lines first in absolute coordinates
+    state.enemies.forEach(enemy => {
+      if (enemy.type === 'shield_linker' && enemy.shieldLinkedEnemyId) {
+        const target = state.enemies.find(e => e.id === enemy.shieldLinkedEnemyId);
+        if (target) {
+          ctx.save();
+          ctx.shadowBlur = 8;
+          ctx.shadowColor = '#3b82f6';
+          ctx.strokeStyle = 'rgba(59, 130, 246, 0.55)'; // Pulsing blue linking line
+          ctx.lineWidth = 2.0;
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.moveTo(enemy.x, enemy.y);
+          ctx.lineTo(target.x, target.y);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+    });
+
     // Draw Enemies (Descending ships with words)
     state.enemies.forEach(enemy => {
       ctx.save();
-      ctx.translate(enemy.x, enemy.y);
+      let jitterX = 0;
+      if (state.enemies.some(e => e.type === 'anomaly') && enemy.type !== 'anomaly') {
+        jitterX = (Math.random() - 0.5) * 1.5;
+      }
+      ctx.translate(enemy.x + jitterX, enemy.y);
+      
+      // Draw protective shield bubble if linked
+      if (enemy.isInvulnerable) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(59, 130, 246, 0.7)';
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = '#3b82f6';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, 28, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
       ctx.shadowBlur = 8;
       ctx.shadowColor = getColorHex(enemy.color);
       ctx.strokeStyle = getColorHex(enemy.color);
@@ -2095,6 +2478,77 @@ export default function GameCanvas({
         ctx.rect(-6, -6, 12, 12);
         ctx.stroke();
         ctx.restore();
+      } else if (enemy.type === 'kamikaze') {
+        // Draw spiked warning sphere
+        ctx.beginPath();
+        ctx.arc(0, 0, 16, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Draw inner warning core
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.25)';
+        ctx.beginPath();
+        ctx.arc(0, 0, 10, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Pulsing outer warning spikes
+        const spikeCycle = Math.sin(Date.now() / 60) * 3 + 3;
+        ctx.beginPath();
+        for (let s = 0; s < 8; s++) {
+          const ang = (s * Math.PI) / 4;
+          ctx.moveTo(Math.cos(ang) * 16, Math.sin(ang) * 16);
+          ctx.lineTo(Math.cos(ang) * (20 + spikeCycle), Math.sin(ang) * (20 + spikeCycle));
+        }
+        ctx.stroke();
+      } else if (enemy.type === 'shield_linker') {
+        // Draw support barge with solar frames
+        ctx.beginPath();
+        ctx.rect(-18, -12, 36, 24);
+        ctx.moveTo(-18, -12); ctx.lineTo(-24, -18); ctx.lineTo(24, -18); ctx.lineTo(18, -12);
+        ctx.moveTo(-18, 12); ctx.lineTo(-24, 18); ctx.lineTo(24, 18); ctx.lineTo(18, 12);
+        ctx.closePath();
+        ctx.stroke();
+        
+        // glowing projector core
+        ctx.fillStyle = 'rgba(59, 130, 246, 0.3)';
+        ctx.beginPath();
+        ctx.arc(0, 0, 7, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (enemy.type === 'anomaly') {
+        // Crystalline neon purple shape
+        const crystalRot = Date.now() * 0.002;
+        ctx.save();
+        ctx.rotate(crystalRot);
+        ctx.beginPath();
+        ctx.moveTo(0, -22);
+        ctx.lineTo(20, 12);
+        ctx.lineTo(-20, 12);
+        ctx.closePath();
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, -22);
+        ctx.moveTo(0, 0);
+        ctx.lineTo(20, 12);
+        ctx.moveTo(0, 0);
+        ctx.lineTo(-20, 12);
+        ctx.stroke();
+        ctx.restore();
+      } else if (enemy.type === 'meteor') {
+        // Fiery space debris
+        ctx.fillStyle = '#ff781e';
+        ctx.beginPath();
+        ctx.arc(0, 0, 10, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Burning tail
+        ctx.fillStyle = 'rgba(255, 120, 30, 0.25)';
+        ctx.beginPath();
+        ctx.moveTo(-10, -5);
+        ctx.lineTo(-22 - Math.random() * 12, 0);
+        ctx.lineTo(-10, 5);
+        ctx.closePath();
+        ctx.fill();
       } else {
         // Drones - styled like a solar probe droid (Common - 50 variants)
         ctx.moveTo(0, 16);
@@ -2160,7 +2614,11 @@ export default function GameCanvas({
 
       // Draw typed letters (dim/gray or glowing) and untyped letters
       const wordWidth = ctx.measureText(word).width;
-      const startX = enemy.x - wordWidth / 2;
+      let gravOffset = 0;
+      if (state.bossObj && state.wave === 50) {
+        gravOffset = Math.sin(Date.now() / 220 + enemy.y * 0.015) * 22;
+      }
+      const startX = enemy.x + gravOffset - wordWidth / 2;
 
       ctx.textBaseline = 'bottom';
       let currentX = startX;
@@ -2171,6 +2629,8 @@ export default function GameCanvas({
 
         if (hasTyped) {
           ctx.fillStyle = 'rgba(255, 255, 255, 0.35)'; // Typed letters dimmed
+        } else if (enemy.isInvulnerable) {
+          ctx.fillStyle = '#ef4444'; // Linked/Locked red color
         } else {
           ctx.fillStyle = getColorHex(enemy.color); // Target color for active letters
         }
@@ -2187,6 +2647,15 @@ export default function GameCanvas({
         ctx.fillText(char, letterPosX, letterPosY);
         
         currentX += ctx.measureText(char).width;
+      }
+
+      // Draw ticking countdown timer for Kamikazes above the word label
+      if (enemy.type === 'kamikaze' && enemy.kamikazeTimer !== undefined) {
+        ctx.fillStyle = '#ef4444';
+        ctx.font = '700 11px Orbitron, sans-serif';
+        ctx.textAlign = 'center';
+        const secondsLeft = (enemy.kamikazeTimer / 60).toFixed(1);
+        ctx.fillText(`${secondsLeft}s`, 0, -48);
       }
 
       ctx.restore();
@@ -2216,8 +2685,12 @@ export default function GameCanvas({
 
       // If bullet has velocity velocities, update them
       if (bullet.vx !== undefined && bullet.vy !== undefined) {
-        bullet.x += bullet.vx;
-        bullet.y += bullet.vy;
+        let speedFactor = 1.0;
+        if (bullet.type === 'temporal') {
+          speedFactor = 0.35 + Math.sin(Date.now() / 140 + bullet.y * 0.04) * 0.65;
+        }
+        bullet.x += bullet.vx * speedFactor;
+        bullet.y += bullet.vy * speedFactor;
       }
     });
 
@@ -2309,6 +2782,29 @@ export default function GameCanvas({
         ctx.beginPath();
         ctx.arc(0, 0, 28, 0, Math.PI * 2);
         ctx.stroke();
+      }
+
+      // Draw subtle passive shield sparks based on defense percent
+      if (labelText.includes('(You)') && state.streak >= 10) {
+        const defLvl = state.streak >= 50 ? 50 : Math.floor(state.streak / 10) * 10;
+        const sparkOpacity = (defLvl / 50) * 0.16 + 0.04; // Very faint, max 0.20 opacity
+        const sparkCount = Math.floor(defLvl / 10);
+        
+        ctx.strokeStyle = `rgba(255, 255, 255, ${sparkOpacity})`;
+        ctx.shadowColor = '#ffffff';
+        ctx.shadowBlur = 4;
+        ctx.lineWidth = 1.0;
+        
+        for (let s = 0; s < sparkCount; s++) {
+          const sparkAngle = (s * (Math.PI * 2)) / sparkCount + (Date.now() * 0.002);
+          const sparkDist = 24 + Math.sin(Date.now() / 100 + s) * 2;
+          const sx = Math.cos(sparkAngle) * sparkDist;
+          const sy = Math.sin(sparkAngle) * sparkDist;
+          
+          ctx.beginPath();
+          ctx.arc(sx, sy, 0.8, 0, Math.PI * 2);
+          ctx.stroke();
+        }
       }
 
       // Draw boss shield bubble if active for this player
@@ -2469,6 +2965,51 @@ export default function GameCanvas({
       ctx.restore();
     }
 
+    // Render Meteor Shower Warning Alert Banner
+    if (state.meteorShowerWarningTimer && state.meteorShowerWarningTimer > 0) {
+      ctx.save();
+      // Blinking orange alert screen
+      const alpha = Math.abs(Math.sin(state.meteorShowerWarningTimer * 0.08)) * 0.15;
+      ctx.fillStyle = `rgba(249, 115, 22, ${alpha})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      
+      ctx.fillStyle = '#f97316'; // Orange warning
+      ctx.font = '900 2.6rem Orbitron, sans-serif';
+      ctx.fillText(`METEOR SHOWER DETECTED`, canvas.width / 2, canvas.height * 0.45);
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '500 1.1rem Outfit, sans-serif';
+      ctx.fillText(`DESTROY DRIFTING METEORS IMMEDIATELY`, canvas.width / 2, canvas.height * 0.53);
+
+      ctx.restore();
+    }
+
+    // Render Quantum Anomaly Warning Alert Banner
+    if (state.anomalyWarningTimer && state.anomalyWarningTimer > 0) {
+      state.anomalyWarningTimer -= 1;
+      ctx.save();
+      // Blinking purple alert screen
+      const alpha = Math.abs(Math.sin(state.anomalyWarningTimer * 0.08)) * 0.15;
+      ctx.fillStyle = `rgba(139, 92, 246, ${alpha})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      
+      ctx.fillStyle = '#8b5cf6'; // Purple warning
+      ctx.font = '900 2.6rem Orbitron, sans-serif';
+      ctx.fillText(`QUANTUM ANOMALY DETECTED`, canvas.width / 2, canvas.height * 0.45);
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '500 1.1rem Outfit, sans-serif';
+      ctx.fillText(`SYSTEM DISTORTION IN PROGRESS - CLEAR ANOMALY SHIELD`, canvas.width / 2, canvas.height * 0.53);
+
+      ctx.restore();
+    }
+
     // Draw Impact Frame Flash (brief screen invert color flash on hits)
     if (state.flashFrame > 0) {
       ctx.fillStyle = `rgba(255, 255, 255, ${state.flashFrame * 0.15})`;
@@ -2486,6 +3027,22 @@ export default function GameCanvas({
     if (enemyId.startsWith('boss-w-')) {
       checkBossShieldsCompleted(enemyId);
     }
+  };
+
+  const updateStreakShield = (streak) => {
+    let defPercent = 0;
+    if (streak >= 50) defPercent = 50;
+    else if (streak >= 40) defPercent = 40;
+    else if (streak >= 30) defPercent = 30;
+    else if (streak >= 20) defPercent = 20;
+    else if (streak >= 10) defPercent = 10;
+    
+    setHudState(prev => {
+      if (prev.defPercent !== defPercent) {
+        return { ...prev, defPercent };
+      }
+      return prev;
+    });
   };
 
   const keyHandlerRef = useRef(handleKeyDown);
@@ -2602,6 +3159,20 @@ export default function GameCanvas({
             }}
             title="Defensive Boss Shield cores [5/7]"
           >
+            {hudState.defPercent > 0 && (
+              <span 
+                style={{ 
+                  fontSize: '7px', 
+                  fontFamily: 'var(--font-display)', 
+                  color: '#ffffff', 
+                  opacity: 0.35,
+                  letterSpacing: '0.5px',
+                  marginBottom: '0.1rem'
+                }}
+              >
+                {hudState.defPercent}% DEF
+              </span>
+            )}
             <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
               {[0, 1, 2].map(sIdx => {
                 const isClaimed = bossShields > sIdx;
@@ -2979,6 +3550,7 @@ export default function GameCanvas({
         wave={hudState.wave}
         isMultiplayer={isMultiplayer}
         teamPlayers={hudState.teammates}
+        health={hudState.health}
       />
     </div>
   );

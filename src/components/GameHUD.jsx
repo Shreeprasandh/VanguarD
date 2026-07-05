@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function GameHUD({ score, multiplier, wave, isMultiplayer, teamPlayers }) {
+export default function GameHUD({ score, multiplier, wave, isMultiplayer, teamPlayers, health = 100 }) {
   return (
     <div className="hud-container">
       <div className="hud-top">
@@ -18,12 +18,54 @@ export default function GameHUD({ score, multiplier, wave, isMultiplayer, teamPl
           </div>
         </div>
 
-        {/* Right Side: Wave */}
-        <div className="hud-group" style={{ alignItems: 'flex-end' }}>
-          <span className="hud-label">Wave</span>
-          <span className="hud-value" style={{ fontFamily: 'var(--font-display)', letterSpacing: '1px' }}>
-            {wave}
-          </span>
+        {/* Right Side: Wave & Health Bar */}
+        <div className="hud-group" style={{ alignItems: 'flex-end', gap: '0.4rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+            <span className="hud-label">Wave</span>
+            <span className="hud-value" style={{ fontFamily: 'var(--font-display)', letterSpacing: '1px' }}>
+              {wave}
+            </span>
+          </div>
+
+          {/* Vertical Health Bar (looks just like charge bar, white color) */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.3rem', marginTop: '0.5rem' }}>
+            <div 
+              style={{
+                width: '8px',
+                height: '50px',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                background: 'rgba(255, 255, 255, 0.02)',
+                borderRadius: '4px',
+                position: 'relative',
+                overflow: 'hidden',
+                boxShadow: '0 0 6px rgba(255, 255, 255, 0.15)'
+              }}
+              title={`Ship Integrity: ${Math.round(health)}%`}
+            >
+              <div 
+                style={{
+                  position: 'absolute',
+                  bottom: 0,
+                  left: 0,
+                  width: '100%',
+                  height: `${Math.max(0, Math.min(100, health))}%`,
+                  background: '#ffffff',
+                  transition: 'height 0.15s ease'
+                }}
+              />
+            </div>
+            <span 
+              style={{ 
+                fontSize: '8px', 
+                fontFamily: 'var(--font-display)', 
+                color: '#ffffff', 
+                letterSpacing: '0.5px',
+                opacity: 0.75
+              }}
+            >
+              {Math.max(0, Math.round(health))}%
+            </span>
+          </div>
         </div>
       </div>
 

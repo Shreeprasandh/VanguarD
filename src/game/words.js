@@ -114,7 +114,7 @@ export function getWordForEnemy(type, waveNumber, usedSet) {
   let commonCandidates = [];
   let rareCandidates = [];
 
-  if (type === 'drone') {
+  if (type === 'drone' || type === 'meteor') {
     if (waveNumber <= 3) {
       commonCandidates = WORDS_SIMPLE_COMMON;
       rareCandidates = WORDS_SIMPLE_RARE;
@@ -122,7 +122,7 @@ export function getWordForEnemy(type, waveNumber, usedSet) {
       commonCandidates = WORDS_MEDIUM_COMMON;
       rareCandidates = WORDS_MEDIUM_RARE;
     }
-  } else if (type === 'interceptor') {
+  } else if (type === 'interceptor' || type === 'kamikaze') {
     if (waveNumber <= 5) {
       commonCandidates = WORDS_MEDIUM_COMMON;
       rareCandidates = WORDS_MEDIUM_RARE;
@@ -130,7 +130,7 @@ export function getWordForEnemy(type, waveNumber, usedSet) {
       commonCandidates = WORDS_HARD_COMMON;
       rareCandidates = WORDS_HARD_RARE;
     }
-  } else if (type === 'cruiser') {
+  } else if (type === 'cruiser' || type === 'shield_linker') {
     if (waveNumber <= 7) {
       commonCandidates = WORDS_HARD_COMMON;
       rareCandidates = WORDS_HARD_RARE;
@@ -139,7 +139,7 @@ export function getWordForEnemy(type, waveNumber, usedSet) {
       rareCandidates = WORDS_EXPERT_RARE;
     }
   } else {
-    // Boss shields and other special items
+    // Boss shields, anomaly mini-boss, and other special items
     commonCandidates = WORDS_EXPERT_COMMON;
     rareCandidates = WORDS_EXPERT_RARE;
   }
