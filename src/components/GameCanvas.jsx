@@ -1218,6 +1218,9 @@ export default function GameCanvas({
       p.y += p.vy;
       p.alpha = Math.max(0, p.life / 60);
       p.life -= 1;
+      if (p.type === 'chunk') {
+        p.angle = (p.angle || 0) + (p.rotSpeed || 0.05);
+      }
     });
     state.particles = state.particles.filter(p => p.life > 0);
 
@@ -1509,6 +1512,56 @@ export default function GameCanvas({
       enemy.y += enemy.speed * baseSpeedMultiplier * multiplayerDifficulty * speedFactor;
       
       // Meteor fiery trailing particle emission
+      // Drone gentle horizontal sway
+      if (enemy.type === 'drone' && speedFactor > 0) {
+        enemy.patternAge = (enemy.patternAge || 0) + 1;
+        enemy.x += Math.sin(enemy.patternAge * 0.04) * 0.65 * speedFactor;
+      }
+
+      // Drone subtle green trailing particles
+      if (enemy.type === 'drone' && speedFactor > 0 && Math.random() < 0.08) {
+        state.particles.push({
+          x: enemy.x,
+          y: enemy.y - 8,
+          vx: (Math.random() - 0.5) * 0.4,
+          vy: -0.2 - Math.random() * 0.3,
+          size: 1.0 + Math.random() * 1.2,
+          color: 'rgba(34, 197, 94, 0.28)', // soft green
+          alpha: 0.65,
+          life: 12 + Math.random() * 12
+        });
+      }
+
+      // Kamikaze fuel exhaust sparks
+      if (enemy.type === 'kamikaze' && speedFactor > 0 && Math.random() < 0.22) {
+        const isCharged = enemy.isCharged;
+        state.particles.push({
+          x: enemy.x + (Math.random() - 0.5) * 4,
+          y: enemy.y - 8,
+          vx: (Math.random() - 0.5) * 0.6,
+          vy: -0.6 - Math.random() * 0.8,
+          size: isCharged ? (1.5 + Math.random() * 1.5) : (1.0 + Math.random() * 1.0),
+          color: isCharged ? 'rgba(239, 68, 68, 0.38)' : 'rgba(249, 115, 22, 0.28)', // soft red/orange
+          alpha: 0.75,
+          life: 8 + Math.random() * 12
+        });
+      }
+
+      // Cruiser heavy dark-purple plasma smoke
+      if (enemy.type === 'cruiser' && speedFactor > 0 && Math.random() < 0.18) {
+        state.particles.push({
+          x: enemy.x + (Math.random() - 0.5) * 8,
+          y: enemy.y - 10,
+          vx: (Math.random() - 0.5) * 0.5,
+          vy: -0.3 - Math.random() * 0.3,
+          size: 1.8 + Math.random() * 2.2,
+          color: 'rgba(168, 85, 247, 0.18)', // soft dark purple
+          alpha: 0.55,
+          life: 20 + Math.random() * 15
+        });
+      }
+
+      // Meteor fiery trailing particle emission
       if (enemy.type === 'meteor' && speedFactor > 0 && Math.random() < 0.35) {
         state.particles.push({
           x: enemy.x + (Math.random() - 0.5) * 6,
@@ -1516,8 +1569,8 @@ export default function GameCanvas({
           vx: (Math.random() - 0.5) * 1.5,
           vy: -enemy.speed * 0.4 - Math.random() * 1.0,
           size: 1 + Math.random() * 3.5,
-          color: Math.random() < 0.55 ? '#f97316' : Math.random() < 0.45 ? '#ef4444' : '#fbbf24',
-          alpha: 0.9,
+          color: Math.random() < 0.55 ? 'rgba(249, 115, 22, 0.4)' : Math.random() < 0.45 ? 'rgba(239, 68, 68, 0.35)' : 'rgba(251, 191, 36, 0.35)',
+          alpha: 0.75,
           life: 15 + Math.random() * 20
         });
       }
@@ -2244,12 +2297,33 @@ export default function GameCanvas({
       // Spark massive explosion on the boss itself
       createExplosion(boss.x, boss.y, getColorHex(boss.words[shieldIndex].color), 30, true);
       GameAudio.play('boss_hit');
+      boss.lastHitTime = Date.now();
 
       // Check if all boss words completed
       if (completedCount >= boss.words.length) {
         // Boss destroyed!
         createExplosion(boss.x, boss.y, '#ffffff', 80, true);
         GameAudio.play('boss_explosion');
+        
+        // Spawn spinning metal chunks that fly away
+        for (let c = 0; c < 7; c++) {
+          const angle = Math.random() * Math.PI * 2;
+          const force = 1.5 + Math.random() * 2.5;
+          state.particles.push({
+            x: boss.x + (Math.random() - 0.5) * 40,
+            y: boss.y + (Math.random() - 0.5) * 20,
+            vx: Math.cos(angle) * force,
+            vy: Math.sin(angle) * force - 0.5,
+            size: 4 + Math.random() * 8,
+            color: 'rgba(168, 85, 247, 0.4)', // soft purple chunk
+            alpha: 0.95,
+            life: 60 + Math.random() * 40,
+            type: 'chunk',
+            angle: Math.random() * Math.PI * 2,
+            rotSpeed: (Math.random() - 0.5) * 0.15
+          });
+        }
+        
         state.bossObj = null;
         
         // Spawn shield claim orb animation
@@ -2308,10 +2382,20 @@ export default function GameCanvas({
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Draw deep background star grid
-    ctx.strokeStyle = `rgba(255, 255, 255, 0.025)`;
-    ctx.lineWidth = 1.0;
     const gridSize = 100;
-    const offset = (state.waveTransitionTimer * 0.1) % gridSize; // Grid moves slightly
+    let yOffset = (state.waveTransitionTimer * 0.1) % gridSize;
+    let strokeColor = `rgba(255, 255, 255, 0.025)`;
+    let lineWidth = 1.0;
+
+    if (state.waveState === 'intro' && state.waveTransitionTimer > 120) {
+      const warpProgress = (state.waveTransitionTimer - 120) / 60; // 1.0 down to 0.0
+      yOffset = (state.waveTransitionTimer * 12.0 * warpProgress) % gridSize;
+      lineWidth = 1.0 + warpProgress * 1.0;
+      strokeColor = `rgba(255, 255, 255, ${0.025 + warpProgress * 0.02})`;
+    }
+
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = lineWidth;
     
     for (let x = 0; x < canvas.width; x += gridSize) {
       ctx.beginPath();
@@ -2319,7 +2403,7 @@ export default function GameCanvas({
       ctx.lineTo(x, canvas.height);
       ctx.stroke();
     }
-    for (let y = 0; y < canvas.height; y += gridSize) {
+    for (let y = yOffset; y < canvas.height; y += gridSize) {
       ctx.beginPath();
       ctx.moveTo(0, y);
       ctx.lineTo(canvas.width, y);
@@ -2792,6 +2876,22 @@ export default function GameCanvas({
       ctx.font = '700 12px Orbitron, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText(bossLabel, 0, -boss.height / 2 - 35);
+
+      // Boss forcefield bubble
+      const hitElapsed = Date.now() - (boss.lastHitTime || 0);
+      const isRippling = hitElapsed < 350;
+      
+      ctx.save();
+      ctx.strokeStyle = `rgba(168, 85, 247, ${isRippling ? 0.35 : 0.18})`; // soft purple
+      ctx.lineWidth = isRippling ? 2.5 : 1.2;
+      ctx.shadowBlur = isRippling ? 8 : 2;
+      ctx.shadowColor = getColorHex(bossColor);
+      ctx.beginPath();
+      const baseRadius = Math.max(boss.width, boss.height) * 0.65;
+      const rippleSize = isRippling ? Math.sin((hitElapsed / 350) * Math.PI) * 4.5 : 0;
+      ctx.arc(0, 0, baseRadius + rippleSize, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
 
       ctx.restore();
     }
@@ -3396,6 +3496,17 @@ export default function GameCanvas({
         let sy = canvas.height - 80;
         if (state.waveState === 'docking') {
           sy -= state.dockingShipYOffset;
+        } else if (state.wave === 1 && state.waveState === 'intro' && state.waveTransitionTimer > 60) {
+          const delay = p.isHost ? 0 : 40;
+          const activeTimer = state.waveTransitionTimer - 60;
+          if (activeTimer > delay) {
+            const progress = (activeTimer - delay) / (120 - delay);
+            const startY = canvas.height + 100;
+            const targetY = canvas.height - 80;
+            sy = targetY + (startY - targetY) * Math.pow(progress, 2);
+          } else {
+            sy = canvas.height + 100;
+          }
         }
         
         // Draw only if player has not died
@@ -3410,6 +3521,12 @@ export default function GameCanvas({
       let sy = canvas.height - 80;
       if (state.waveState === 'docking') {
         sy -= state.dockingShipYOffset;
+      } else if (state.wave === 1 && state.waveState === 'intro' && state.waveTransitionTimer > 60) {
+        const activeTimer = state.waveTransitionTimer - 60;
+        const progress = activeTimer / 120;
+        const startY = canvas.height + 100;
+        const targetY = canvas.height - 80;
+        sy = targetY + (startY - targetY) * Math.pow(progress, 2);
       }
       renderShip(canvas.width / 2, sy, shipColor, username + ' (You)');
     }
@@ -3500,13 +3617,27 @@ export default function GameCanvas({
       ctx.textBaseline = 'middle';
       
       // Flash title
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '900 3rem Orbitron, sans-serif';
-      ctx.fillText(`WAVE ${state.wave}`, canvas.width / 2, canvas.height * 0.46);
+      if (state.wave === 1) {
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '900 2.2rem Orbitron, sans-serif';
+        const titleText = isMultiplayer ? "STRIKE TEAM VANGUARDZ" : "VANGUARDZ-01";
+        ctx.fillText(titleText, canvas.width / 2, canvas.height * 0.44);
 
-      ctx.fillStyle = getColorHex('blue');
-      ctx.font = '400 1rem Outfit, sans-serif';
-      ctx.fillText('INCOMING HOSTILE ATTACKS - PREPARE KEYBOARD', canvas.width / 2, canvas.height * 0.54);
+        ctx.fillStyle = isMultiplayer ? getColorHex('green') : getColorHex('red');
+        ctx.font = '500 1.05rem Outfit, sans-serif';
+        const subtitleText = isMultiplayer
+          ? "Coordinates locked. Stand together, die together."
+          : "Entering Sector S... You are on your own. For the fallen.";
+        ctx.fillText(subtitleText, canvas.width / 2, canvas.height * 0.52);
+      } else {
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '900 3rem Orbitron, sans-serif';
+        ctx.fillText(`WAVE ${state.wave}`, canvas.width / 2, canvas.height * 0.46);
+
+        ctx.fillStyle = getColorHex('blue');
+        ctx.font = '400 1rem Outfit, sans-serif';
+        ctx.fillText('INCOMING HOSTILE ATTACKS - PREPARE KEYBOARD', canvas.width / 2, canvas.height * 0.54);
+      }
 
       ctx.restore();
     } else if (state.waveState === 'boss_warning') {
@@ -3582,6 +3713,21 @@ export default function GameCanvas({
     if (state.flashFrame > 0) {
       ctx.fillStyle = `rgba(255, 255, 255, ${state.flashFrame * 0.15})`;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    // Render soft pulsing red vignette on low health
+    if (state.health < 25 && state.health > 0) {
+      ctx.save();
+      const vignetteAlpha = (0.12 + Math.sin(Date.now() * 0.005) * 0.06) * ((25 - state.health) / 25);
+      const gradient = ctx.createRadialGradient(
+        canvas.width / 2, canvas.height / 2, Math.min(canvas.width, canvas.height) * 0.4,
+        canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height) * 0.75
+      );
+      gradient.addColorStop(0, 'rgba(239, 68, 68, 0)');
+      gradient.addColorStop(1, `rgba(239, 68, 68, ${vignetteAlpha})`);
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
     }
 
 
