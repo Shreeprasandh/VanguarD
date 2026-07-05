@@ -5,7 +5,7 @@ export default function GameHUD({ score, multiplier, wave, isMultiplayer, teamPl
     <div className="hud-container">
       <div className="hud-top">
         {/* Left Side: Score & Multiplier */}
-        <div className="hud-group">
+        <div className="hud-group" style={{ opacity: 0.25 }}>
           <span className="hud-label">Score</span>
           <span className="hud-value" style={{ color: 'var(--neon-blue)', textShadow: 'var(--shadow-blue)' }}>
             {score.toLocaleString()}
@@ -38,7 +38,7 @@ export default function GameHUD({ score, multiplier, wave, isMultiplayer, teamPl
                 borderRadius: '4px',
                 position: 'relative',
                 overflow: 'hidden',
-                opacity: 0.7,
+                opacity: 0.65,
                 boxShadow: '0 0 6px rgba(255, 255, 255, 0.15)'
               }}
               title={`Ship Integrity: ${Math.round(health)}%`}
@@ -61,7 +61,7 @@ export default function GameHUD({ score, multiplier, wave, isMultiplayer, teamPl
                 fontFamily: 'var(--font-display)', 
                 color: '#ffffff', 
                 letterSpacing: '0.5px',
-                opacity: 0.75
+                opacity: 0.45
               }}
             >
               {Math.max(0, Math.round(health))}%
