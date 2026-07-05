@@ -368,6 +368,9 @@ export default function GameCanvas({
             state.bullets = [];
             state.waveSpawnedCount = 0;
             state.waveTotalToSpawn = 10 + data.wave * 4;
+            // Fully heal client player between waves
+            state.health = 100;
+            setHudState(prev => ({ ...prev, health: 100 }));
             // Shift target nebula colors
             state.targetNebulaColor = {
               h: (260 + data.wave * 30) % 360,
@@ -1047,9 +1050,9 @@ export default function GameCanvas({
 
     if (state.isPaused) return;
 
-    // Gradual health regeneration over time (1.0 HP per second)
+    // Gradual health regeneration over time (2.5 HP per second)
     if (state.health < 100 && state.health > 0) {
-      state.health = Math.min(100, state.health + (1.0 / 60)); // 1.0 HP/s at 60fps
+      state.health = Math.min(100, state.health + (2.5 / 60)); // 2.5 HP/s at 60fps
       state.regenHudTimer = (state.regenHudTimer || 0) + 1;
       if (state.regenHudTimer >= 15) {
         state.regenHudTimer = 0;
@@ -1219,7 +1222,7 @@ export default function GameCanvas({
       }
 
       const now = Date.now();
-      const spawnInterval = state.wave >= 100 ? 100 : Math.max(1200, 3200 - state.wave * 150); // Spawning speed scales up
+      const spawnInterval = state.wave >= 100 ? 400 : Math.max(1500, 3200 - state.wave * 55); // Spawning speed scales up (caps at Wave 31)
       const totalToSpawn = state.wave >= 100 ? 999999 : state.waveTotalToSpawn;
       
       if (now - state.lastSpawnTime > spawnInterval && state.waveSpawnedCount < totalToSpawn) {
@@ -1383,7 +1386,7 @@ export default function GameCanvas({
     });
 
     // Enemies movement
-    const baseSpeedMultiplier = state.wave >= 100 ? 8.5 : (1.0 + (state.wave * 0.08)); // Speed scales up with waves
+    const baseSpeedMultiplier = state.wave >= 100 ? 5.5 : (1.0 + (state.wave * 0.03)); // Speed scales up with waves (75% adjustment for wave 80 limit)
     const multiplayerDifficulty = isMultiplayer ? 1.25 : 1.0; // 25% harder as requested
     
     state.enemies.forEach(enemy => {
@@ -2134,6 +2137,10 @@ export default function GameCanvas({
   const advanceNextWave = () => {
     const state = stateRef.current;
     if (state.wave >= 100) return; // Wave 100 is the final impossible level
+    
+    // Fully heal player between waves
+    state.health = 100;
+    setHudState(prev => ({ ...prev, health: 100 }));
     
     const nextWaveNum = state.wave + 1;
     

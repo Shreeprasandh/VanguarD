@@ -131,7 +131,7 @@ export function getWordForEnemy(type, waveNumber, usedSet) {
       rareCandidates = WORDS_HARD_RARE;
     }
   } else if (type === 'cruiser' || type === 'shield_linker') {
-    if (waveNumber <= 7) {
+    if (waveNumber <= 28) {
       commonCandidates = WORDS_HARD_COMMON;
       rareCandidates = WORDS_HARD_RARE;
     } else {
