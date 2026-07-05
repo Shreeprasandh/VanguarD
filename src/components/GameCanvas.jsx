@@ -771,7 +771,8 @@ export default function GameCanvas({
   };
 
   const getPan = (x) => {
-    const screenWidth = canvas ? canvas.width : window.innerWidth;
+    const canvasVal = canvasRef.current;
+    const screenWidth = canvasVal ? canvasVal.width : window.innerWidth;
     const localPosition = isMultiplayer 
       ? players.find(p => p.socketId === socket?.id)?.position || 'center' 
       : 'center';

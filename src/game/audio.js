@@ -1061,8 +1061,8 @@ class AudioManager {
           osc.frequency.setValueAtTime(freq, t);
           
           gain.gain.setValueAtTime(0.0001, t);
-          gain.gain.exponentialRampToValueAtTime(0.012, t + 0.8); // slow fade-in pad
-          gain.gain.exponentialRampToValueAtTime(0.012, t + 3.2); // sustain until 3.2s
+          gain.gain.exponentialRampToValueAtTime(0.006, t + 0.8); // slow fade-in pad (half volume)
+          gain.gain.exponentialRampToValueAtTime(0.006, t + 3.2); // sustain until 3.2s
           gain.gain.exponentialRampToValueAtTime(0.0001, t + 3.9); // fade out fully before next chord
           
           osc.connect(gain);
@@ -1088,8 +1088,8 @@ class AudioManager {
           chimeOsc.frequency.setValueAtTime(chimeFreq, t); // Set immediately to prevent start-clicks
 
           chimeGain.gain.setValueAtTime(0.0001, chimeTime);
-          chimeGain.gain.exponentialRampToValueAtTime(0.0045, chimeTime + 0.025); // clickless 25ms attack
-          chimeGain.gain.exponentialRampToValueAtTime(0.0045, chimeTime + chimeDur);
+          chimeGain.gain.exponentialRampToValueAtTime(0.0022, chimeTime + 0.025); // clickless 25ms attack (half volume)
+          chimeGain.gain.exponentialRampToValueAtTime(0.0022, chimeTime + chimeDur);
           chimeGain.gain.exponentialRampToValueAtTime(0.0001, chimeTime + chimeDur + 0.4); // soft 400ms release
 
           chimeOsc.connect(chimeGain);
