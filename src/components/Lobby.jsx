@@ -340,18 +340,7 @@ export default function Lobby({ roomCode, players, maxPlayers = 3, localPlayerId
                         Host
                       </span>
                     )}
-                    {player.socketId === localPlayerId && (
-                      <span 
-                        className="role-indicator" 
-                        style={{ 
-                          borderColor: 'rgba(255, 255, 255, 0.15)', 
-                          color: '#ffffff', 
-                          background: 'rgba(255,255,255,0.02)' 
-                        }}
-                      >
-                        You
-                      </span>
-                    )}
+
                     {!player.isHost && (
                       <span 
                         className="role-indicator" 

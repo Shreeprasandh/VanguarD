@@ -67,6 +67,8 @@ export default function GameCanvas({
     waveTotalToSpawn: 10,
     isLocalGameOver: false,
     teammates: [],
+    playerPositions: {},
+    leavingShips: [],
     isPaused: false,
     charge: 0,
     cooldowns: [0, 0, 0],
@@ -178,8 +180,28 @@ export default function GameCanvas({
   useEffect(() => {
     if (isMultiplayer && players) {
       const state = stateRef.current;
+
+      // Animate leaving ships for players who are no longer in the list
+      const currentSocketIds = players.map(p => p.socketId);
+      if (state.teammates && state.teammates.length > 0) {
+        state.teammates.forEach(mate => {
+          if (!currentSocketIds.includes(mate.socketId)) {
+            const currentX = state.playerPositions[mate.socketId] || getShipX(mate.position, canvasRef.current?.width || window.innerWidth);
+            state.leavingShips.push({
+              socketId: mate.socketId,
+              x: currentX,
+              y: canvasRef.current ? canvasRef.current.height - 80 : window.innerHeight - 80,
+              vy: 1.5,
+              color: mate.color,
+              username: mate.username,
+              opacity: 1.0
+            });
+            delete state.playerPositions[mate.socketId];
+          }
+        });
+      }
+
       // Filter out local player and store others as teammates
-      const local = players.find(p => p.socketId === socket?.id);
       const mates = players.map(p => {
         // Find if they already have health in our state
         const existingMate = state.teammates.find(m => m.socketId === p.socketId);
@@ -191,7 +213,7 @@ export default function GameCanvas({
           isHost: p.isHost,
           score: p.score || 0,
           level: p.level || 1,
-          health: existingMate ? existingMate.health : 100
+          health: existingMate ? existingMate.health : (p.health !== undefined ? p.health : 100)
         };
       });
       state.teammates = mates;
@@ -481,6 +503,23 @@ export default function GameCanvas({
             break;
           }
 
+          case 'GAME_PAUSED': {
+            setPaused(true);
+            setPausingPlayers(data.pausingPlayers || []);
+            setPausingSocketIds(data.pausingSocketIds || []);
+            break;
+          }
+
+          case 'GAME_RESUMED': {
+            setPaused(false);
+            setPausingPlayers([]);
+            setPausingSocketIds([]);
+            setTimeout(() => {
+              canvasRef.current?.focus();
+            }, 50);
+            break;
+          }
+
           case 'NEXT_WAVE': {
             state.wave = data.wave;
             state.waveState = 'intro';
@@ -656,7 +695,7 @@ export default function GameCanvas({
     setCharge(state.charge);
     setCooldowns([...state.cooldowns]);
     const canvasVal = canvasRef.current;
-    const pxVal = canvasVal ? getShipX(localPosition, canvasVal.width) : window.innerWidth / 2;
+    const pxVal = canvasVal ? getLocalShipX(canvasVal.width) : window.innerWidth / 2;
     GameAudio.play('laserPlayer', getPan(pxVal));
 
     // Trigger specific skill powers
@@ -894,13 +933,20 @@ export default function GameCanvas({
     return screenWidth / 2; // host/center
   };
 
-  const getPan = (x) => {
-    const canvasVal = canvasRef.current;
-    const screenWidth = canvasVal ? canvasVal.width : window.innerWidth;
+  const getLocalShipX = (screenWidth) => {
+    if (isMultiplayer && socket?.id && stateRef.current.playerPositions[socket.id] !== undefined) {
+      return stateRef.current.playerPositions[socket.id];
+    }
     const localPosition = isMultiplayer 
       ? players.find(p => p.socketId === socket?.id)?.position || 'center' 
       : 'center';
-    const shipX = getShipX(localPosition, screenWidth);
+    return getShipX(localPosition, screenWidth);
+  };
+
+  const getPan = (x) => {
+    const canvasVal = canvasRef.current;
+    const screenWidth = canvasVal ? canvasVal.width : window.innerWidth;
+    const shipX = getLocalShipX(screenWidth);
     if (Math.abs(x - shipX) < 1) return 0;
     if (x < shipX) {
       return Math.max(-1.0, (x - shipX) / Math.max(1, shipX));
@@ -936,7 +982,15 @@ export default function GameCanvas({
     // Toggle pause on Escape key
     if (e.key === 'Escape') {
       e.preventDefault();
-      togglePause();
+      if (isMultiplayer) {
+        if (pausingSocketIds.includes(socket?.id)) {
+          handleResumeRequest();
+        } else {
+          handlePauseRequest();
+        }
+      } else {
+        togglePause();
+      }
       return;
     }
 
@@ -1132,10 +1186,7 @@ export default function GameCanvas({
     }
 
     // Add laser beam from local player ship
-    const localPosition = isMultiplayer 
-      ? players.find(p => p.socketId === socket?.id)?.position || 'center' 
-      : 'center';
-    const shipX = getShipX(localPosition, canvas.width);
+    const shipX = getLocalShipX(canvas.width);
     const shipY = canvas.height - 80;
 
     const charOffset = charIndex * 14; // Font spacing approximation
@@ -1612,10 +1663,7 @@ export default function GameCanvas({
         }
 
         // Get player ship coordinates
-        const localPosition = isMultiplayer 
-          ? players.find(p => p.socketId === socket?.id)?.position || 'center' 
-          : 'center';
-        const shipX = getShipX(localPosition, canvas.width);
+        const shipX = getLocalShipX(canvas.width);
         const shipY = canvas.height - 80;
 
         // Update rings
@@ -4022,23 +4070,45 @@ export default function GameCanvas({
       ctx.restore();
     };
 
+    // Update smooth positions for active players
+    if (players) {
+      players.forEach(p => {
+        const targetX = getShipX(p.position, canvas.width);
+        if (state.playerPositions[p.socketId] === undefined) {
+          state.playerPositions[p.socketId] = targetX;
+        } else {
+          state.playerPositions[p.socketId] += (targetX - state.playerPositions[p.socketId]) * 0.08;
+        }
+      });
+    }
+
+    // Update leaving ships positions
+    if (state.leavingShips) {
+      state.leavingShips.forEach(ship => {
+        ship.y += ship.vy;
+        ship.vy += 0.3; // gravity acceleration
+        ship.opacity = Math.max(0, ship.opacity - 0.02);
+      });
+      state.leavingShips = state.leavingShips.filter(ship => ship.y < canvas.height + 150 && ship.opacity > 0);
+    }
+
     if (isMultiplayer && players) {
       // Draw all active teammates in co-op
       players.forEach(p => {
-        const sx = getShipX(p.position, canvas.width);
+        const sx = state.playerPositions[p.socketId] || getShipX(p.position, canvas.width);
         let sy = canvas.height - 80;
         if (state.waveState === 'docking') {
           sy -= state.dockingShipYOffset;
         } else if (state.wave === 1 && state.waveState === 'intro' && state.waveTransitionTimer > 60) {
           const delay = p.isHost ? 0 : 40;
           const activeTimer = state.waveTransitionTimer - 60;
+          const startY = canvas.height + 100;
+          const targetY = canvas.height - 80;
           if (activeTimer > delay) {
             const progress = (activeTimer - delay) / (120 - delay);
-            const startY = canvas.height + 100;
-            const targetY = canvas.height - 80;
             sy = targetY + (startY - targetY) * Math.pow(progress, 2);
           } else {
-            sy = canvas.height + 100;
+            sy = targetY; // Fixes flickering for non-hosts
           }
         }
         
@@ -4049,6 +4119,16 @@ export default function GameCanvas({
           renderShip(sx, sy, p.color || shipColor, p.username + suffix);
         }
       });
+
+      // Draw leaving ships flying out of the screen
+      if (state.leavingShips) {
+        state.leavingShips.forEach(ship => {
+          ctx.save();
+          ctx.globalAlpha = ship.opacity;
+          renderShip(ship.x, ship.y, ship.color, ship.username);
+          ctx.restore();
+        });
+      }
     } else {
       // Draw single solo player ship
       let sy = canvas.height - 80;
@@ -4298,7 +4378,21 @@ export default function GameCanvas({
   });
 
   const [paused, setPaused] = useState(false);
+  const [pausingPlayers, setPausingPlayers] = useState([]);
+  const [pausingSocketIds, setPausingSocketIds] = useState([]);
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
+
+  const handlePauseRequest = () => {
+    if (socket && isMultiplayer) {
+      socket.send(JSON.stringify({ type: 'PAUSE_REQUEST' }));
+    }
+  };
+
+  const handleResumeRequest = () => {
+    if (socket && isMultiplayer) {
+      socket.send(JSON.stringify({ type: 'RESUME_REQUEST' }));
+    }
+  };
   const [charge, setCharge] = useState(0);
   const [cooldowns, setCooldowns] = useState([0, 0, 0]);
   const [bossShields, setBossShields] = useState(0);
@@ -4760,23 +4854,85 @@ export default function GameCanvas({
 
             {/* Action Buttons */}
             <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.8rem', alignItems: 'center' }}>
-              <button
-                className="btn btn-blue"
-                style={{
-                  width: '100%',
-                  maxWidth: '280px',
-                  padding: '0.8rem',
-                  fontSize: '0.85rem',
-                  fontFamily: 'var(--font-display)',
-                  letterSpacing: '2px',
-                  textTransform: 'uppercase',
-                  borderRadius: '2px',
-                  cursor: 'pointer'
-                }}
-                onClick={togglePause}
-              >
-                Resume Mission
-              </button>
+              {isMultiplayer ? (
+                <div style={{ textAlign: 'center', width: '100%', display: 'flex', flexDirection: 'column', gap: '0.8rem', alignItems: 'center' }}>
+                  <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', fontStyle: 'italic', marginBottom: '0.5rem', lineHeight: '1.4' }}>
+                    Status: <span style={{ color: 'var(--neon-yellow)', fontWeight: 'bold' }}>STANDBY</span>
+                    <br />
+                    Paused by: <span style={{ color: 'var(--neon-blue)', fontWeight: 'bold' }}>{pausingPlayers.join(' & ')}</span>
+                  </div>
+                  {pausingSocketIds.includes(socket?.id) ? (
+                    <>
+                      <button
+                        className="btn btn-blue"
+                        style={{
+                          width: '100%',
+                          maxWidth: '280px',
+                          padding: '0.8rem',
+                          fontSize: '0.85rem',
+                          fontFamily: 'var(--font-display)',
+                          letterSpacing: '2px',
+                          textTransform: 'uppercase',
+                          borderRadius: '2px',
+                          cursor: 'pointer'
+                        }}
+                        onClick={handleResumeRequest}
+                      >
+                        Resume Mission
+                      </button>
+                      {pausingPlayers.length > 1 && (
+                        <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', marginTop: '0.2rem' }}>
+                          Waiting for other pausing pilots to resume...
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--neon-red)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '0.4rem', fontWeight: 'bold' }}>
+                        Waiting for pausing pilots to resume
+                      </div>
+                      <button
+                        className="btn btn-red"
+                        style={{
+                          width: '100%',
+                          maxWidth: '280px',
+                          padding: '0.8rem',
+                          fontSize: '0.85rem',
+                          fontFamily: 'var(--font-display)',
+                          letterSpacing: '2px',
+                          textTransform: 'uppercase',
+                          borderRadius: '2px',
+                          cursor: 'pointer',
+                          borderColor: 'var(--neon-red)',
+                          background: 'rgba(239, 68, 68, 0.05)',
+                          color: 'var(--neon-red)'
+                        }}
+                        onClick={handlePauseRequest}
+                      >
+                        Request Pause (Pause Also)
+                      </button>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <button
+                  className="btn btn-blue"
+                  style={{
+                    width: '100%',
+                    maxWidth: '280px',
+                    padding: '0.8rem',
+                    fontSize: '0.85rem',
+                    fontFamily: 'var(--font-display)',
+                    letterSpacing: '2px',
+                    textTransform: 'uppercase',
+                    borderRadius: '2px',
+                    cursor: 'pointer'
+                  }}
+                  onClick={togglePause}
+                >
+                  Resume Mission
+                </button>
+              )}
 
               <button
                 className="btn btn-red"
@@ -4926,7 +5082,15 @@ export default function GameCanvas({
         }}
         onClick={(e) => {
           e.stopPropagation();
-          togglePause();
+          if (isMultiplayer) {
+            if (pausingSocketIds.includes(socket?.id)) {
+              handleResumeRequest();
+            } else {
+              handlePauseRequest();
+            }
+          } else {
+            togglePause();
+          }
         }}
         title={paused ? 'Resume Game' : 'Pause Game'}
       >
@@ -4949,6 +5113,8 @@ export default function GameCanvas({
         isMultiplayer={isMultiplayer}
         teamPlayers={hudState.teammates}
         health={hudState.health}
+        localPlayerId={socket?.id}
+        localPlayerColor={shipColor}
       />
     </div>
   );

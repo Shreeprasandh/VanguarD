@@ -153,6 +153,7 @@ export default function App() {
           const data = JSON.parse(event.data);
           switch (data.type) {
             case 'REGISTERED':
+              socket.id = data.socketId;
               setLocalSocketId(data.socketId);
               break;
 

@@ -593,6 +593,51 @@ wss.on('connection', (ws) => {
           break;
         }
 
+        case 'PAUSE_REQUEST': {
+          const code = player.roomId;
+          const room = rooms.get(code);
+          if (room) {
+            if (!room.pausingPlayers) {
+              room.pausingPlayers = [];
+            }
+            if (!room.pausingPlayers.includes(socketId)) {
+              room.pausingPlayers.push(socketId);
+            }
+            sendToRoom(code, {
+              type: 'GAME_PAUSED',
+              pausingPlayers: room.pausingPlayers.map(pId => {
+                const p = room.players.find(pl => pl.socketId === pId);
+                return p ? p.username : 'Unknown';
+              }),
+              pausingSocketIds: room.pausingPlayers
+            });
+          }
+          break;
+        }
+
+        case 'RESUME_REQUEST': {
+          const code = player.roomId;
+          const room = rooms.get(code);
+          if (room && room.pausingPlayers) {
+            room.pausingPlayers = room.pausingPlayers.filter(pId => pId !== socketId);
+            if (room.pausingPlayers.length === 0) {
+              sendToRoom(code, {
+                type: 'GAME_RESUMED'
+              });
+            } else {
+              sendToRoom(code, {
+                type: 'GAME_PAUSED',
+                pausingPlayers: room.pausingPlayers.map(pId => {
+                  const p = room.players.find(pl => pl.socketId === pId);
+                  return p ? p.username : 'Unknown';
+                }),
+                pausingSocketIds: room.pausingPlayers
+              });
+            }
+          }
+          break;
+        }
+
         case 'LEAVE_ROOM': {
           if (player.roomId) {
             handleLeaveRoom(socketId);
@@ -635,6 +680,25 @@ function handleLeaveRoom(socketId) {
   if (room.players.length === 0) {
     rooms.delete(code);
   } else {
+    // Remove from pausing list if they were paused
+    if (room.pausingPlayers) {
+      room.pausingPlayers = room.pausingPlayers.filter(pId => pId !== socketId);
+      if (room.pausingPlayers.length === 0) {
+        sendToRoom(code, {
+          type: 'GAME_RESUMED'
+        });
+      } else {
+        sendToRoom(code, {
+          type: 'GAME_PAUSED',
+          pausingPlayers: room.pausingPlayers.map(pId => {
+            const p = room.players.find(pl => pl.socketId === pId);
+            return p ? p.username : 'Unknown';
+          }),
+          pausingSocketIds: room.pausingPlayers
+        });
+      }
+    }
+
     // Re-assign host if host left
     if (wasHost) {
       room.players[0].isHost = true;
