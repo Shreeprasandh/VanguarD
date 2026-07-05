@@ -1,10 +1,43 @@
 import React from 'react';
 import { GameAudio } from '../game/audio';
 
-export default function GameOver({ score, wave, isMultiplayer, teamPlayers, onReturnMenu }) {
+export default function GameOver({ score, wave, isMultiplayer, teamPlayers, onReturnMenu, onReturnLobby }) {
   const handleReturn = () => {
     GameAudio.play('click');
     onReturnMenu();
+  };
+
+  const handleReturnLobby = () => {
+    GameAudio.play('click');
+    onReturnLobby();
+  };
+
+  const renderActionButtons = (defaultLabel = 'Return to command') => {
+    if (isMultiplayer) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', width: '100%', marginTop: '2.5rem' }}>
+          <button 
+            className="btn-defeat-action" 
+            style={{ marginTop: 0, borderColor: 'var(--neon-blue)', color: 'var(--neon-blue)', background: 'rgba(74, 144, 226, 0.02)' }} 
+            onClick={handleReturnLobby}
+          >
+            Return to Squadron Lobby
+          </button>
+          <button 
+            className="btn-defeat-action" 
+            style={{ marginTop: 0 }} 
+            onClick={handleReturn}
+          >
+            Leave Room & Return to Menu
+          </button>
+        </div>
+      );
+    }
+    return (
+      <button className="btn-defeat-action" onClick={handleReturn}>
+        {defaultLabel}
+      </button>
+    );
   };
 
   const isSacrificeWave = wave >= 100;
@@ -124,9 +157,7 @@ export default function GameOver({ score, wave, isMultiplayer, teamPlayers, onRe
               Thank you, now your friends are safe.
             </div>
 
-            <button className="btn-defeat-action" onClick={handleReturn}>
-              Return to Main Menu to Start Over
-            </button>
+            {renderActionButtons('Return to Main Menu to Start Over')}
           </>
         ) : (
           <>
@@ -168,9 +199,7 @@ export default function GameOver({ score, wave, isMultiplayer, teamPlayers, onRe
               </div>
             )}
 
-            <button className="btn-defeat-action" onClick={handleReturn}>
-              Return to command
-            </button>
+            {renderActionButtons('Return to command')}
           </>
         )}
       </div>

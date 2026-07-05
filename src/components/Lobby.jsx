@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { GameAudio } from '../game/audio';
 
-export default function Lobby({ roomCode, players, localPlayerId, onSelectColor, onStartGame, onLeaveRoom }) {
+export default function Lobby({ roomCode, players, maxPlayers = 3, localPlayerId, onSelectColor, onStartGame, onLeaveRoom }) {
   const [errorMessage, setErrorMessage] = useState(null);
 
   const localPlayerInRoom = players.find(p => p.socketId === localPlayerId);
@@ -9,11 +9,16 @@ export default function Lobby({ roomCode, players, localPlayerId, onSelectColor,
   const localPlayerColor = localPlayerInRoom?.color || null;
 
   // Position slots
-  const slots = [
-    { position: 'center', label: 'Host' },
-    { position: 'right', label: 'Wingman II' },
-    { position: 'left', label: 'Wingman I' }
-  ];
+  const slots = maxPlayers === 2
+    ? [
+        { position: 'left', label: 'Squadron Leader' },
+        { position: 'right', label: 'Wingman' }
+      ]
+    : [
+        { position: 'center', label: 'Host' },
+        { position: 'right', label: 'Wingman II' },
+        { position: 'left', label: 'Wingman I' }
+      ];
 
   const getPlayerInPosition = (pos) => {
     return players.find(p => p.position === pos);
@@ -46,7 +51,7 @@ export default function Lobby({ roomCode, players, localPlayerId, onSelectColor,
     onLeaveRoom();
   };
 
-  const isLobbyFull = players.length === 3;
+  const isLobbyFull = players.length === maxPlayers;
   const allPickedColors = players.every(p => p.color);
   const colorsList = players.map(p => p.color).filter(Boolean);
   const uniqueColors = new Set(colorsList);
@@ -268,7 +273,7 @@ export default function Lobby({ roomCode, players, localPlayerId, onSelectColor,
       </div>
 
       {/* Lobby Slots */}
-      <div className="lobby-grid-columns">
+      <div className="lobby-grid-columns" style={{ gridTemplateColumns: `repeat(${maxPlayers}, 1fr)` }}>
         {slots.map((slot) => {
           const player = getPlayerInPosition(slot.position);
           return (

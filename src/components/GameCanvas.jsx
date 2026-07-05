@@ -323,17 +323,44 @@ export default function GameCanvas({
             // Start boss fight phase on clients
             state.waveState = 'boss_fight';
             state.bossObj = {
-              id: 'boss',
+              id: data.bossId || 'boss',
+              type: data.bossType || 'boss',
+              name: data.bossName || 'BOSS',
+              color: data.bossColor || 'purple',
               x: window.innerWidth / 2,
               y: 120,
-              width: 180,
-              height: 100,
-              health: 100,
+              width: data.bossWidth || 180,
+              height: data.bossHeight || 100,
+              health: data.bossHealth || 100,
               maxHealth: 100,
               words: data.bossWords || [],
               phase: data.phase,
               shootTimer: 120
             };
+            // Clear any active boss shields to prevent duplicates
+            state.enemies = state.enemies.filter(e => e.type !== 'boss_shield');
+            loadBossWordsAsEnemies(data.bossWords);
+            break;
+          }
+
+          case 'ANOMALY_WARNING': {
+            state.anomalyWarningTimer = 180; // 3 seconds banner alert
+            GameAudio.play('emp');
+            break;
+          }
+
+          case 'METEOR_WARNING': {
+            state.meteorShowerTriggered = true;
+            state.meteorShowerWarningTimer = 180;
+            GameAudio.play('meteor_warning');
+            break;
+          }
+
+          case 'BOSS_WARNING': {
+            state.waveState = 'boss_warning';
+            state.waveTransitionTimer = 180;
+            state.targetNebulaColor = { h: 0, s: 70, l: 8 };
+            GameAudio.play('emp');
             break;
           }
 
@@ -361,7 +388,76 @@ export default function GameCanvas({
                 const resolvedColor = skill ? skill.color : '#ffffff';
                 createExplosion(mx, my, resolvedColor, 20);
                 GameAudio.play('laserPlayer', getPan(mx));
+
+                // Apply passive/global utility skill effects on the client's screen locally!
+                if (data.skillId === 'emp_discharge') {
+                  state.enemies.forEach(e => {
+                    let duration = 4000;
+                    if (e.type === 'interceptor') duration = 3000;
+                    else if (e.type === 'cruiser') duration = 2000;
+                    else if (e.type === 'boss') duration = 1000;
+                    e.freezeTime = duration;
+                  });
+                  createExplosion(window.innerWidth / 2, window.innerHeight / 2, resolvedColor, 45, true);
+                } else if (data.skillId === 'nebula_veil') {
+                  state.enemies.forEach(e => {
+                    let multiplier = 0.5;
+                    if (e.type === 'interceptor') multiplier = 0.625;
+                    else if (e.type === 'cruiser') multiplier = 0.75;
+                    else if (e.type === 'boss') multiplier = 0.875;
+                    e.slowMultiplier = multiplier;
+                    e.slowTime = 6000;
+                  });
+                } else if (data.skillId === 'quantum_warp') {
+                  state.bullets = [];
+                  createExplosion(window.innerWidth / 2, window.innerHeight - 80, resolvedColor, 35, true);
+                } else if (data.skillId === 'gravity_rewind') {
+                  state.enemies.forEach(e => {
+                    if (e.type !== 'boss_shield' && e.type !== 'anomaly' && e.speed > 0) {
+                      e.y = Math.max(50, e.y - 150);
+                    }
+                  });
+                  createExplosion(window.innerWidth / 2, window.innerHeight * 0.3, resolvedColor, 30);
+                } else if (data.skillId === 'laser_sweep') {
+                  state.enemies.forEach(e => {
+                    if (e.word && e.word.length > 0) {
+                      e.word = e.word.substring(1);
+                      if (state.activeWordId === e.id) {
+                        e.targetIndex = Math.max(0, e.targetIndex - 1);
+                      }
+                    }
+                  });
+                  createExplosion(window.innerWidth / 2, window.innerHeight * 0.4, resolvedColor, 25);
+                } else if (data.skillId === 'decoy_probe') {
+                  state.decoyTime = 6000;
+                } else if (data.skillId === 'chronos_drive') {
+                  state.chronosDriveTime = 8000;
+                } else if (data.skillId === 'reflector_shield') {
+                  state.reflectorTime = 5000;
+                } else if (data.skillId === 'hologram_decoy') {
+                  state.hologramTime = 6000;
+                }
               }
+            }
+            break;
+          }
+
+          case 'SYNC_POSITIONS': {
+            if (socket.id !== data.hostId) {
+              data.enemies.forEach(syncE => {
+                const localE = state.enemies.find(e => e.id === syncE.id);
+                if (localE) {
+                  localE.x = syncE.x;
+                  localE.y = syncE.y;
+                }
+              });
+              data.bullets.forEach(syncB => {
+                const localB = state.bullets.find(b => b.id === syncB.id);
+                if (localB) {
+                  localB.x = syncB.x;
+                  localB.y = syncB.y;
+                }
+              });
             }
             break;
           }
@@ -592,7 +688,7 @@ export default function GameCanvas({
           if (e.word && e.word.length > 0) {
             e.word = e.word.substring(1);
             if (state.activeWordId === e.id) {
-              e.typedIndex = Math.max(0, e.typedIndex - 1);
+              e.targetIndex = Math.max(0, e.targetIndex - 1);
             }
           }
         });
@@ -621,6 +717,7 @@ export default function GameCanvas({
 
           const toType = Math.min(lettersCount, target.word.length);
           target.word = target.word.substring(toType);
+          target.targetIndex = 0; // Reset typing progress to 0 to prevent target locking
           
           if (target.word.length === 0) {
             handleEnemyKill(target);
@@ -660,7 +757,7 @@ export default function GameCanvas({
         // Destroy lowest health non-boss enemy
         let target = null;
         state.enemies.forEach(e => {
-          if (e.type !== 'boss') {
+          if (e.type !== 'boss' && e.type !== 'boss_shield' && e.type !== 'boss_shield_linker' && e.type !== 'anomaly') {
             if (!target || e.word.length < target.word.length) {
               target = e;
             }
@@ -684,6 +781,7 @@ export default function GameCanvas({
           if (e.word && e.word.length > 0) {
             const toType = Math.min(2, e.word.length);
             e.word = e.word.substring(toType);
+            e.targetIndex = 0; // Reset typing progress to 0 to prevent target locking
             if (e.word.length === 0) {
               handleEnemyKill(e);
             } else {
@@ -702,6 +800,14 @@ export default function GameCanvas({
           if (activeShield && activeShield.word) {
             const count = Math.ceil(activeShield.word.length * 0.25);
             activeShield.word = activeShield.word.substring(count);
+            
+            // Also update the active shield enemy in state.enemies
+            const shieldEnemy = state.enemies.find(e => e.id === activeShield.id);
+            if (shieldEnemy) {
+              shieldEnemy.word = activeShield.word;
+              shieldEnemy.targetIndex = 0;
+            }
+
             if (activeShield.word.length === 0) {
               activeShield.completed = true;
               checkBossShieldsCompleted(activeShield.id);
@@ -727,7 +833,10 @@ export default function GameCanvas({
 
       case 'gravity_rewind':
         state.enemies.forEach(e => {
-          e.y = Math.max(50, e.y - 150);
+          // Do not push boss shields or anomaly mini-bosses (which have speed = 0 and should remain centered)
+          if (e.type !== 'boss_shield' && e.type !== 'anomaly' && e.speed > 0) {
+            e.y = Math.max(50, e.y - 150);
+          }
         });
         createExplosion(canvasRef.current.width / 2, canvasRef.current.height * 0.3, skill.color, 30);
         break;
@@ -777,7 +886,12 @@ export default function GameCanvas({
       ? players.find(p => p.socketId === socket?.id)?.position || 'center' 
       : 'center';
     const shipX = getShipX(localPosition, screenWidth);
-    return Math.max(-1.0, Math.min(1.0, (x - shipX) / (screenWidth / 2)));
+    if (Math.abs(x - shipX) < 1) return 0;
+    if (x < shipX) {
+      return Math.max(-1.0, (x - shipX) / Math.max(1, shipX));
+    } else {
+      return Math.min(1.0, (x - shipX) / Math.max(1, screenWidth - shipX));
+    }
   };
 
   const createExplosion = (x, y, color, particleCount = 15, isBig = false) => {
@@ -1099,6 +1213,8 @@ export default function GameCanvas({
 
     if (state.isPaused) return;
 
+    const isHost = !isMultiplayer || (players.find(p => p.socketId === socket?.id)?.isHost);
+
     // Gradual health regeneration over time (2.5 HP per second)
     if (state.health < 100 && state.health > 0) {
       state.health = Math.min(100, state.health + (2.5 / 60)); // 2.5 HP/s at 60fps
@@ -1243,7 +1359,7 @@ export default function GameCanvas({
       if (state.waveTransitionTimer <= 0) {
         state.waveState = 'playing';
         state.meteorShowerTriggered = false; // Reset meteor shower status
-        if (isPrime(state.wave) && state.wave % 10 !== 0) {
+        if (isHost && isPrime(state.wave) && state.wave % 10 !== 0) {
           if (Math.random() < 0.45) {
             spawnAnomalyMiniBoss();
           }
@@ -1253,7 +1369,6 @@ export default function GameCanvas({
     }
 
     // Spawning Enemies (Authoritative Host generates spawns in co-op)
-    const isHost = !isMultiplayer || (players.find(p => p.socketId === socket?.id)?.isHost);
     
     if (isHost && state.waveState === 'playing') {
       // Random Meteor Shower trigger logic
@@ -1442,7 +1557,15 @@ export default function GameCanvas({
 
     // Enemies movement
     const baseSpeedMultiplier = state.wave >= 100 ? 5.5 : (1.0 + (state.wave * 0.03)); // Speed scales up with waves (75% adjustment for wave 80 limit)
-    const multiplayerDifficulty = isMultiplayer ? 1.25 : 1.0; // 25% harder as requested
+    
+    let multiplayerDifficulty = 1.0;
+    if (isMultiplayer && players) {
+      if (players.length === 2) {
+        multiplayerDifficulty = 1.20; // 20% harder
+      } else if (players.length >= 3) {
+        multiplayerDifficulty = 1.40; // 40% harder
+      }
+    }
     
     state.enemies.forEach(enemy => {
       // Kamikaze timer ticking
@@ -1595,14 +1718,14 @@ export default function GameCanvas({
         enemy.patternAge = (enemy.patternAge || 0) + 1;
         
         if (pat === 'sine') {
-          enemy.x += Math.sin(enemy.y * 0.02) * 1.8 * speedFactor;
+          enemy.x += (enemy.dirMultiplier || 1) * Math.sin(enemy.y * 0.02) * 1.8 * speedFactor;
         } else if (pat === 'cosine') {
-          enemy.x += Math.cos(enemy.y * 0.02) * 1.8 * speedFactor;
+          enemy.x += (enemy.dirMultiplier || 1) * Math.cos(enemy.y * 0.02) * 1.8 * speedFactor;
         } else if (pat === 'zigzag') {
           const zigDir = Math.floor(enemy.patternAge / 55) % 2 === 0 ? 1 : -1;
-          enemy.x += zigDir * 1.6 * speedFactor;
+          enemy.x += (enemy.dirMultiplier || 1) * zigDir * 1.6 * speedFactor;
         } else if (pat === 'drift') {
-          enemy.x += Math.sin(enemy.patternAge * 0.007) * 2.2 * speedFactor;
+          enemy.x += (enemy.dirMultiplier || 1) * Math.sin(enemy.patternAge * 0.007) * 2.2 * speedFactor;
         }
         
         // Keep ships inside canvas bounds
@@ -1611,10 +1734,13 @@ export default function GameCanvas({
 
       // Cruiser shooting bullets logic
       if (enemy.type === 'cruiser' && isHost) {
-        enemy.shootCooldown = (enemy.shootCooldown || 180) - 1;
-        if (enemy.shootCooldown <= 0) {
-          fireGeneralBullet(enemy);
-          enemy.shootCooldown = state.wave >= 100 ? 15 : (180 + Math.random() * 120); // Unbeatable bullet storm
+        const isFrozen = (enemy.freezeTime && enemy.freezeTime > 0) || (enemy.anchoredTime && enemy.anchoredTime > 0);
+        if (!isFrozen) {
+          enemy.shootCooldown = (enemy.shootCooldown || 180) - 1;
+          if (enemy.shootCooldown <= 0) {
+            fireGeneralBullet(enemy);
+            enemy.shootCooldown = state.wave >= 100 ? 15 : (180 + Math.random() * 120); // Unbeatable bullet storm
+          }
         }
       }
 
@@ -1646,7 +1772,19 @@ export default function GameCanvas({
         speedFactor = 0.35 + Math.sin(Date.now() / 140 + bullet.y * 0.04) * 0.65;
       }
 
-      if (bullet.vx === undefined || bullet.vy === undefined) {
+      // If decoy is active, override velocity to steer towards the decoy position on the left
+      if (state.decoyTime > 0) {
+        const destX = window.innerWidth * 0.1;
+        const destY = window.innerHeight - 80;
+        const angle = Math.atan2(destY - bullet.y, destX - bullet.x);
+        bullet.vx = Math.cos(angle) * bullet.speed;
+        bullet.vy = Math.sin(angle) * bullet.speed;
+      }
+
+      if (bullet.vx !== undefined && bullet.vy !== undefined) {
+        bullet.x += bullet.vx * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor;
+        bullet.y += bullet.vy * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor;
+      } else {
         bullet.y += bullet.speed * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor;
       }
 
@@ -1673,6 +1811,21 @@ export default function GameCanvas({
         }
       }
     });
+
+    // Periodic synchronization from Host to Guest to prevent drift (60 frames = 1s)
+    if (isMultiplayer && isHost && state.enemies.length > 0) {
+      state.syncTimer = (state.syncTimer || 0) + 1;
+      if (state.syncTimer >= 60) {
+        state.syncTimer = 0;
+        const enemyPositions = state.enemies.map(e => ({ id: e.id, x: e.x, y: e.y }));
+        const bulletPositions = state.bullets.map(b => ({ id: b.id, x: b.x, y: b.y }));
+        socket.send(JSON.stringify({
+          type: 'SYNC_POSITIONS',
+          enemies: enemyPositions,
+          bullets: bulletPositions
+        }));
+      }
+    }
   };
 
   const spawnAnomalyMiniBoss = () => {
@@ -1686,7 +1839,7 @@ export default function GameCanvas({
     const word = getWordForEnemy('anomaly', state.wave, state.usedWords);
     const enemyId = 'anomaly';
     
-    state.enemies.push({
+    const anomalyEnemy = {
       id: enemyId,
       word,
       wordQueue: [],
@@ -1697,10 +1850,23 @@ export default function GameCanvas({
       targetIndex: 0,
       type: 'anomaly',
       shootCooldown: 140
-    });
+    };
+
+    state.enemies.push(anomalyEnemy);
     
     state.anomalyWarningTimer = 180; // 3 seconds banner alert
     GameAudio.play('emp'); // alert sound
+
+    if (isMultiplayer && socket) {
+      socket.send(JSON.stringify({
+        type: 'SPAWN_ENEMIES',
+        enemies: [anomalyEnemy],
+        hostId: socket.id
+      }));
+      socket.send(JSON.stringify({
+        type: 'ANOMALY_WARNING'
+      }));
+    }
   };
 
   const spawnMeteors = () => {
@@ -1710,13 +1876,14 @@ export default function GameCanvas({
 
     const count = 4 + Math.floor(Math.random() * 3); // 4 to 6 meteors
     const chars = 'abcdefghijklmnopqrstuvwxyz';
+    const newMeteors = [];
     
     for (let i = 0; i < count; i++) {
       const char = chars[Math.floor(Math.random() * chars.length)];
       const x = canvas.width * 0.15 + Math.random() * (canvas.width * 0.7);
       const speed = 2.0 + Math.random() * 1.5;
       
-      state.enemies.push({
+      const meteor = {
         id: `meteor-${Math.random().toString(36).substring(2, 9)}`,
         word: char,
         wordQueue: [],
@@ -1727,7 +1894,17 @@ export default function GameCanvas({
         targetIndex: 0,
         type: 'meteor',
         seed: Math.random() * Math.PI * 2
-      });
+      };
+      state.enemies.push(meteor);
+      newMeteors.push(meteor);
+    }
+
+    if (isMultiplayer && socket) {
+      socket.send(JSON.stringify({
+        type: 'SPAWN_ENEMIES',
+        enemies: newMeteors,
+        hostId: socket.id
+      }));
     }
   };
 
@@ -1786,13 +1963,29 @@ export default function GameCanvas({
       // Determine spawn column (keep within central 60% of screen)
       const x = canvas.width * 0.25 + Math.random() * (canvas.width * 0.5);
       
-      // In co-op, assign player color targets. In solo, assign based on rank/type.
+      // In co-op, assign player color targets using a non-predictive Shuffled Bag approach.
+      // This guarantees an equal balance of spawns across teammates over a small window without being predictive.
       let color;
       if (isMultiplayer) {
         color = shipColor;
         if (players && players.length > 0) {
           const colors = players.map(p => p.color).filter(Boolean);
-          color = colors[Math.floor(Math.random() * colors.length)] || shipColor;
+          if (colors.length > 0) {
+            if (!state.colorSpawnBag || state.colorSpawnBag.length === 0) {
+              const tempBag = [];
+              const repetitions = colors.length === 2 ? 3 : 2; // For 2P: 3 each (6 total). For 3P: 2 each (6 total).
+              for (let r = 0; r < repetitions; r++) {
+                tempBag.push(...colors);
+              }
+              // Fisher-Yates Shuffle
+              for (let j = tempBag.length - 1; j > 0; j--) {
+                const k = Math.floor(Math.random() * (j + 1));
+                [tempBag[j], tempBag[k]] = [tempBag[k], tempBag[j]];
+              }
+              state.colorSpawnBag = tempBag;
+            }
+            color = state.colorSpawnBag.pop() || shipColor;
+          }
         }
       } else {
         if (type === 'drone') color = 'orange';
@@ -1833,8 +2026,19 @@ export default function GameCanvas({
         type,
         shootCooldown: 150,
         movementPattern: pattern,
-        patternAge: 0
+        patternAge: 0,
+        dirMultiplier: Math.random() < 0.5 ? 1 : -1
       };
+
+      // Apply Nebula Veil slow if active at spawn time
+      if (state.nebulaSlowTime > 0) {
+        let multiplier = 0.5; // Drone: 50% slow
+        if (type === 'interceptor') multiplier = 0.625; // 37.5% slow
+        else if (type === 'cruiser') multiplier = 0.75; // 25% slow
+        else if (type === 'boss') multiplier = 0.875; // 12.5% slow
+        enemy.slowMultiplier = multiplier;
+        enemy.slowTime = state.nebulaSlowTime;
+      }
 
       state.enemies.push(enemy);
       newEnemies.push(enemy);
@@ -1887,6 +2091,12 @@ export default function GameCanvas({
     // Spawn warnings siren loop or flash triggers
     GameAudio.play('emp');
 
+    if (isMultiplayer && socket) {
+      socket.send(JSON.stringify({
+        type: 'BOSS_WARNING'
+      }));
+    }
+
     setTimeout(() => {
       if (state.isLocalGameOver) return;
       spawnBossFight();
@@ -1927,9 +2137,14 @@ export default function GameCanvas({
       }
     }
 
+    const bossName = state.wave >= 100 ? 'VOID EMPEROR' : state.wave === 50 ? 'SINGULARITY VOID' : 'BOSS DREADNOUGHT';
+
     state.waveState = 'boss_fight';
     state.bossObj = {
       id: 'boss',
+      type: 'boss',
+      name: bossName,
+      color: 'purple',
       x: canvas.width / 2,
       y: 120,
       width: 180,
@@ -1949,6 +2164,13 @@ export default function GameCanvas({
       socket.send(JSON.stringify({
         type: 'SYNC_BOSS_PHASE',
         phase: 0,
+        bossId: 'boss',
+        bossType: 'boss',
+        bossName: bossName,
+        bossColor: 'purple',
+        bossWidth: 180,
+        bossHeight: 100,
+        bossHealth: 100,
         bossWords: bossWords,
         hostId: socket.id
       }));
@@ -2013,6 +2235,22 @@ export default function GameCanvas({
 
     loadBossWordsAsEnemies(bossWords);
     GameAudio.play('emp'); // spawn alert sound cue
+
+    if (isMultiplayer && socket) {
+      socket.send(JSON.stringify({
+        type: 'SYNC_BOSS_PHASE',
+        phase: 0,
+        bossId: 'mini-boss',
+        bossType: 'mini_boss',
+        bossName: miniBossName,
+        bossColor: miniBossColor,
+        bossWidth: 145,
+        bossHeight: 85,
+        bossHealth: 100,
+        bossWords: bossWords,
+        hostId: socket.id
+      }));
+    }
   };
 
   const loadBossWordsAsEnemies = (bossWords) => {
@@ -2066,12 +2304,13 @@ export default function GameCanvas({
     // Void Emperor (Wave 100) fires a triple spread of letter bullets
     if (state.wave >= 100) {
       const angles = [baseAngle - 0.22, baseAngle, baseAngle + 0.22];
+      const spawnedBullets = [];
       angles.forEach((angle, idx) => {
         const bId = bulletId + '-' + idx;
         const bLetter = alphabet[Math.floor(Math.random() * alphabet.length)];
         const bSpeed = 2.2;
         
-        state.bullets.push({
+        const bulletObj = {
           id: bId,
           letter: bLetter,
           x: startX,
@@ -2080,8 +2319,22 @@ export default function GameCanvas({
           vx: Math.cos(angle) * bSpeed,
           vy: Math.sin(angle) * bSpeed,
           type: 'boss_spiral'
-        });
+        };
+        state.bullets.push(bulletObj);
+        spawnedBullets.push(bulletObj);
       });
+
+      GameAudio.play('boss_laser');
+
+      if (isMultiplayer && socket) {
+        spawnedBullets.forEach(b => {
+          socket.send(JSON.stringify({
+            type: 'SPAWN_BULLET',
+            bullet: b,
+            hostId: socket.id
+          }));
+        });
+      }
     } else {
       // Standard or Chronos Temporal Bullet
       const isTemporal = state.wave === 20;
@@ -2099,16 +2352,16 @@ export default function GameCanvas({
       };
       
       state.bullets.push(bullet);
-    }
 
-    GameAudio.play('boss_laser');
+      GameAudio.play('boss_laser');
 
-    if (isMultiplayer && socket) {
-      socket.send(JSON.stringify({
-        type: 'SPAWN_BULLET',
-        bullet,
-        hostId: socket.id
-      }));
+      if (isMultiplayer && socket) {
+        socket.send(JSON.stringify({
+          type: 'SPAWN_BULLET',
+          bullet,
+          hostId: socket.id
+        }));
+      }
     }
   };
 
@@ -2135,7 +2388,22 @@ export default function GameCanvas({
     let color = shipColor;
     if (isMultiplayer && players) {
       const colors = players.map(p => p.color).filter(Boolean);
-      color = colors[Math.floor(Math.random() * colors.length)] || shipColor;
+      if (colors.length > 0) {
+        if (!state.colorSpawnBag || state.colorSpawnBag.length === 0) {
+          const tempBag = [];
+          const repetitions = colors.length === 2 ? 3 : 2; // For 2P: 3 each (6 total). For 3P: 2 each (6 total).
+          for (let r = 0; r < repetitions; r++) {
+            tempBag.push(...colors);
+          }
+          // Fisher-Yates Shuffle
+          for (let j = tempBag.length - 1; j > 0; j--) {
+            const k = Math.floor(Math.random() * (j + 1));
+            [tempBag[j], tempBag[k]] = [tempBag[k], tempBag[j]];
+          }
+          state.colorSpawnBag = tempBag;
+        }
+        color = state.colorSpawnBag.pop() || shipColor;
+      }
     } else {
       if (type === 'kamikaze') color = 'red';
       else if (type === 'shield_linker') color = 'blue';
@@ -2149,8 +2417,19 @@ export default function GameCanvas({
       y: state.bossObj.y + 40,
       speed,
       targetIndex: 0,
-      type
+      type,
+      dirMultiplier: Math.random() < 0.5 ? 1 : -1
     };
+
+    // Apply Nebula Veil slow if active at spawn time
+    if (state.nebulaSlowTime > 0) {
+      let multiplier = 0.5; // Drone: 50% slow
+      if (type === 'interceptor') multiplier = 0.625; // 37.5% slow
+      else if (type === 'cruiser') multiplier = 0.75; // 25% slow
+      else if (type === 'boss') multiplier = 0.875; // 12.5% slow
+      minion.slowMultiplier = multiplier;
+      minion.slowTime = state.nebulaSlowTime;
+    }
 
     state.enemies.push(minion);
 

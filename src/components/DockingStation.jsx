@@ -3,6 +3,7 @@ import { GameAudio } from '../game/audio';
 import { SKILLS_DB } from './SkillsData';
 
 export default function DockingStation({
+  username,
   shipColor,
   equippedSkills,
   isMultiplayer,
@@ -29,6 +30,11 @@ export default function DockingStation({
   }, [selectedColor, selectedSkills, ready, isMultiplayer]);
 
   const [selectedSlot, setSelectedSlot] = useState(0); // 0, 1, or 2
+
+  const localPlayer = isMultiplayer && players
+    ? players.find(p => p.socketId === socket?.id || p.username === username)
+    : null;
+  const isHost = localPlayer ? localPlayer.isHost : true;
 
   const handleSkillToggle = (skillId) => {
     GameAudio.play('click');
@@ -472,31 +478,51 @@ export default function DockingStation({
           </div>
 
           {/* Action button at bottom */}
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <button
-              className="btn btn-primary"
-              style={{
-                maxWidth: '320px',
-                width: '100%',
-                padding: '0.9rem 0',
-                fontSize: '0.9rem',
-                letterSpacing: '3px',
-                background: 'transparent',
-                border: colorConflict || (isMultiplayer && !allPlayersReady) 
-                  ? '1px solid rgba(255,255,255,0.08)' 
-                  : '1px solid var(--neon-blue)',
-                color: colorConflict || (isMultiplayer && !allPlayersReady) 
-                  ? 'rgba(255,255,255,0.2)' 
-                  : 'var(--neon-blue)',
-                borderRadius: '2px',
-                textTransform: 'uppercase',
-                cursor: colorConflict || (isMultiplayer && !allPlayersReady) ? 'not-allowed' : 'pointer'
-              }}
-              disabled={colorConflict || (isMultiplayer && !allPlayersReady)}
-              onClick={handleLaunch}
-            >
-              {isMultiplayer ? 'Launch Squadron' : 'Undock & Disengage'}
-            </button>
+          <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+            {!isHost ? (
+              <div 
+                style={{ 
+                  textAlign: 'center', 
+                  fontFamily: 'var(--font-display)', 
+                  color: ready ? '#2ebd59' : 'rgba(255,255,255,0.4)', 
+                  letterSpacing: '2px',
+                  fontSize: '0.85rem',
+                  padding: '1rem',
+                  border: ready ? '1px dashed #2ebd59' : '1px dashed rgba(255,255,255,0.1)',
+                  width: '100%',
+                  maxWidth: '320px',
+                  boxShadow: ready ? '0 0 10px rgba(46, 189, 89, 0.15)' : 'none',
+                  textTransform: 'uppercase'
+                }}
+              >
+                {!ready ? 'LOCK CONFIGURATION TO READY UP' : 'WAITING FOR SQUADRON LEADER TO LAUNCH...'}
+              </div>
+            ) : (
+              <button
+                className="btn btn-primary"
+                style={{
+                  maxWidth: '320px',
+                  width: '100%',
+                  padding: '0.9rem 0',
+                  fontSize: '0.9rem',
+                  letterSpacing: '3px',
+                  background: 'transparent',
+                  border: colorConflict || (isMultiplayer && !allPlayersReady) 
+                    ? '1px solid rgba(255,255,255,0.08)' 
+                    : '1px solid var(--neon-blue)',
+                  color: colorConflict || (isMultiplayer && !allPlayersReady) 
+                    ? 'rgba(255,255,255,0.2)' 
+                    : 'var(--neon-blue)',
+                  borderRadius: '2px',
+                  textTransform: 'uppercase',
+                  cursor: colorConflict || (isMultiplayer && !allPlayersReady) ? 'not-allowed' : 'pointer'
+                }}
+                disabled={colorConflict || (isMultiplayer && !allPlayersReady)}
+                onClick={handleLaunch}
+              >
+                {isMultiplayer ? 'Launch Squadron' : 'Undock & Disengage'}
+              </button>
+            )}
           </div>
 
           <div style={{ position: 'absolute', bottom: '-10px', left: '-15px', width: '30px', height: '10px', borderBottom: '1px solid rgba(255,255,255,0.15)', borderLeft: '1px solid rgba(255,255,255,0.15)' }} />

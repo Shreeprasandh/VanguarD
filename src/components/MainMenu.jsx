@@ -390,14 +390,26 @@ export default function MainMenu({
           ) : (
             <div style={{ width: '100%', display: 'flex', flexDirection: 'column', animation: 'fadeIn 0.3s ease' }}>
               <div className="menu-item-row">
-                {renderPointer('create')}
+                {renderPointer('create_2p')}
                 <button 
                   className="minimal-text-btn"
-                  onMouseEnter={() => setHoveredBtn('create')}
+                  onMouseEnter={() => setHoveredBtn('create_2p')}
                   onMouseLeave={() => setHoveredBtn(null)}
-                  onClick={() => { handleButtonClick(); onCreateRoom(); }}
+                  onClick={() => { handleButtonClick(); onCreateRoom(2); }}
                 >
-                  Create Room
+                  Create 2P Room
+                </button>
+              </div>
+
+              <div className="menu-item-row" style={{ marginTop: '0.5rem' }}>
+                {renderPointer('create_3p')}
+                <button 
+                  className="minimal-text-btn"
+                  onMouseEnter={() => setHoveredBtn('create_3p')}
+                  onMouseLeave={() => setHoveredBtn(null)}
+                  onClick={() => { handleButtonClick(); onCreateRoom(3); }}
+                >
+                  Create 3P Room
                 </button>
               </div>
 

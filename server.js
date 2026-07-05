@@ -149,9 +149,11 @@ wss.on('connection', (ws) => {
           
           // Also sync score inside active room
           if (player.roomId) {
+            const room = rooms.get(player.roomId);
             sendToRoom(player.roomId, {
               type: 'ROOM_PLAYERS_UPDATE',
-              players: getRoomPlayersData(player.roomId)
+              players: getRoomPlayersData(player.roomId),
+              maxPlayers: room ? room.maxPlayers : 3
             });
           }
           break;
@@ -168,18 +170,21 @@ wss.on('connection', (ws) => {
             code = generateRoomCode();
           }
 
+          const maxPlayers = data.maxPlayers === 2 ? 2 : 3;
+
           const room = {
             code,
             players: [{
               socketId,
               username: player.username,
               color: null,
-              position: 'center', // Host is center
+              position: maxPlayers === 2 ? 'left' : 'center', // If 2 players, host starts as 'left'
               isHost: true
             }],
             state: 'lobby',
             wave: 1,
-            hostId: socketId
+            hostId: socketId,
+            maxPlayers: maxPlayers
           };
 
           rooms.set(code, room);
@@ -189,7 +194,8 @@ wss.on('connection', (ws) => {
           ws.send(JSON.stringify({
             type: 'ROOM_CREATED',
             roomCode: code,
-            players: getRoomPlayersData(code)
+            players: getRoomPlayersData(code),
+            maxPlayers: room.maxPlayers
           }));
           
           broadcastLeaderboard();
@@ -205,7 +211,8 @@ wss.on('connection', (ws) => {
             break;
           }
 
-          if (room.players.length >= 3) {
+          const maxPlayers = room.maxPlayers || 3;
+          if (room.players.length >= maxPlayers) {
             ws.send(JSON.stringify({ type: 'ROOM_ERROR', message: 'Room is full.' }));
             break;
           }
@@ -220,12 +227,17 @@ wss.on('connection', (ws) => {
             handleLeaveRoom(socketId);
           }
 
-          // Assign position: 1st host (center), 2nd (right), 3rd (left)
+          // Assign position based on room player count and capacity
           let position = 'center';
-          if (room.players.length === 1) {
-            position = 'right';
-          } else if (room.players.length === 2) {
-            position = 'left';
+          if (maxPlayers === 2) {
+            position = 'right'; // 1st is host (left), 2nd is right
+          } else {
+            // For 3 players: 1st host (center), 2nd (right), 3rd (left)
+            if (room.players.length === 1) {
+              position = 'right';
+            } else if (room.players.length === 2) {
+              position = 'left';
+            }
           }
 
           room.players.push({
@@ -243,13 +255,15 @@ wss.on('connection', (ws) => {
           ws.send(JSON.stringify({
             type: 'ROOM_JOINED',
             roomCode: code,
-            players: getRoomPlayersData(code)
+            players: getRoomPlayersData(code),
+            maxPlayers: room.maxPlayers
           }));
 
           // Notify room members
           sendToRoom(code, {
             type: 'ROOM_PLAYERS_UPDATE',
-            players: getRoomPlayersData(code)
+            players: getRoomPlayersData(code),
+            maxPlayers: room.maxPlayers
           });
 
           broadcastLeaderboard();
@@ -270,7 +284,8 @@ wss.on('connection', (ws) => {
 
           sendToRoom(code, {
             type: 'ROOM_PLAYERS_UPDATE',
-            players: getRoomPlayersData(code)
+            players: getRoomPlayersData(code),
+            maxPlayers: room.maxPlayers
           });
           break;
         }
@@ -289,7 +304,8 @@ wss.on('connection', (ws) => {
 
           sendToRoom(code, {
             type: 'ROOM_PLAYERS_UPDATE',
-            players: getRoomPlayersData(code)
+            players: getRoomPlayersData(code),
+            maxPlayers: room.maxPlayers
           });
           break;
         }
@@ -415,7 +431,45 @@ wss.on('connection', (ws) => {
             sendToRoom(player.roomId, {
               type: 'SYNC_BOSS_PHASE',
               phase: data.phase,
-              bossWords: data.bossWords
+              bossId: data.bossId,
+              bossType: data.bossType,
+              bossName: data.bossName,
+              bossColor: data.bossColor,
+              bossWidth: data.bossWidth,
+              bossHeight: data.bossHeight,
+              bossHealth: data.bossHealth,
+              bossWords: data.bossWords,
+              hostId: socketId
+            }, socketId);
+          }
+          break;
+        }
+
+        case 'BOSS_WARNING': {
+          if (player.roomId) {
+            sendToRoom(player.roomId, {
+              type: 'BOSS_WARNING'
+            }, socketId);
+          }
+          break;
+        }
+
+        case 'ANOMALY_WARNING': {
+          if (player.roomId) {
+            sendToRoom(player.roomId, {
+              type: 'ANOMALY_WARNING'
+            }, socketId);
+          }
+          break;
+        }
+
+        case 'SYNC_POSITIONS': {
+          if (player.roomId) {
+            sendToRoom(player.roomId, {
+              type: 'SYNC_POSITIONS',
+              enemies: data.enemies,
+              bullets: data.bullets,
+              hostId: socketId
             }, socketId);
           }
           break;
@@ -461,6 +515,16 @@ wss.on('connection', (ws) => {
               type: 'NEXT_WAVE',
               wave: data.wave
             }, socketId);
+          }
+          break;
+        }
+
+        case 'INIT_DOCK': {
+          if (player.roomId) {
+            sendToRoom(player.roomId, {
+              type: 'INIT_DOCK',
+              wave: data.wave
+            });
           }
           break;
         }
@@ -514,16 +578,23 @@ function handleLeaveRoom(socketId) {
     }
 
     // Re-assign positions so they align correctly
+    const maxPlayers = room.maxPlayers || 3;
     room.players.forEach((p, idx) => {
-      if (idx === 0) p.position = 'center';
-      else if (idx === 1) p.position = 'right';
-      else if (idx === 2) p.position = 'left';
+      if (maxPlayers === 2) {
+        if (idx === 0) p.position = 'left';
+        else if (idx === 1) p.position = 'right';
+      } else {
+        if (idx === 0) p.position = 'center';
+        else if (idx === 1) p.position = 'right';
+        else if (idx === 2) p.position = 'left';
+      }
     });
 
     // Notify remaining players
     sendToRoom(code, {
       type: 'ROOM_PLAYERS_UPDATE',
-      players: getRoomPlayersData(code)
+      players: getRoomPlayersData(code),
+      maxPlayers: room.maxPlayers
     });
 
     sendToRoom(code, {

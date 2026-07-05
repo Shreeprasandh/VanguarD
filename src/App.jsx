@@ -42,6 +42,7 @@ export default function App() {
   const [isMultiplayer, setIsMultiplayer] = useState(false);
   const [roomCode, setRoomCode] = useState('');
   const [players, setPlayers] = useState([]);
+  const [maxPlayers, setMaxPlayers] = useState(3);
   const [leaderboard, setLeaderboard] = useState([]);
 
   const socketRef = useRef(null);
@@ -144,6 +145,7 @@ export default function App() {
             case 'ROOM_CREATED':
               setRoomCode(data.roomCode);
               setPlayers(data.players);
+              setMaxPlayers(data.maxPlayers || 3);
               setIsMultiplayer(true);
               changeScreenWithFade('lobby');
               break;
@@ -151,16 +153,23 @@ export default function App() {
             case 'ROOM_JOINED':
               setRoomCode(data.roomCode);
               setPlayers(data.players);
+              setMaxPlayers(data.maxPlayers || 3);
               setIsMultiplayer(true);
               changeScreenWithFade('lobby');
               break;
 
             case 'ROOM_PLAYERS_UPDATE':
               setPlayers(data.players);
+              if (data.maxPlayers) {
+                setMaxPlayers(data.maxPlayers);
+              }
               break;
 
             case 'GAME_STARTED':
               setPlayers(data.players);
+              if (data.maxPlayers) {
+                setMaxPlayers(data.maxPlayers);
+              }
               changeScreenWithFade('playing');
               break;
 
@@ -270,9 +279,12 @@ export default function App() {
     }
   };
 
-  const handleCreateRoom = () => {
+  const handleCreateRoom = (maxPlayers = 3) => {
     if (socketRef.current && socketConnected) {
-      socketRef.current.send(JSON.stringify({ type: 'CREATE_ROOM' }));
+      socketRef.current.send(JSON.stringify({ 
+        type: 'CREATE_ROOM',
+        maxPlayers
+      }));
     }
   };
 
@@ -345,6 +357,10 @@ export default function App() {
     }
   };
 
+  const handleReturnLobby = () => {
+    changeScreenWithFade('lobby');
+  };
+
   const toggleMute = () => {
     const isMuted = GameAudio.toggleMute();
     setMuted(isMuted);
@@ -375,6 +391,7 @@ export default function App() {
           <Lobby
             roomCode={roomCode}
             players={players}
+            maxPlayers={maxPlayers}
             localPlayerId={socketRef.current ? socketRef.current.id : ''}
             onSelectColor={handleSelectColor}
             onStartGame={handleStartGame}
@@ -411,6 +428,7 @@ export default function App() {
       case 'docking':
         return (
           <DockingStation
+            username={username}
             shipColor={shipColor}
             equippedSkills={equippedSkills}
             isMultiplayer={isMultiplayer}
@@ -429,6 +447,7 @@ export default function App() {
             isMultiplayer={isMultiplayer}
             teamPlayers={players}
             onReturnMenu={handleReturnMenu}
+            onReturnLobby={handleReturnLobby}
           />
         );
 
