@@ -28,17 +28,17 @@ export default function GameHUD({ score, multiplier, wave, isMultiplayer, teamPl
           </div>
 
           {/* Vertical Health Bar (looks just like charge bar, white color) */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.3rem', marginTop: '0.5rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.3rem', marginTop: '1.6rem' }}>
             <div 
               style={{
                 width: '8px',
-                height: '75px',
+                height: '112px',
                 border: '1px solid rgba(255, 255, 255, 0.15)',
                 background: 'rgba(255, 255, 255, 0.02)',
                 borderRadius: '4px',
                 position: 'relative',
                 overflow: 'hidden',
-                opacity: 0.35,
+                opacity: 0.7,
                 boxShadow: '0 0 6px rgba(255, 255, 255, 0.15)'
               }}
               title={`Ship Integrity: ${Math.round(health)}%`}

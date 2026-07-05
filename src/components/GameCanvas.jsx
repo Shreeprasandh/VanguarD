@@ -447,6 +447,15 @@ export default function GameCanvas({
 
   const handleEnemyKill = (enemy) => {
     const state = stateRef.current;
+    
+    if (enemy.type === 'mirage_decoy') {
+      state.activeWordId = null;
+      createExplosion(enemy.x, enemy.y, '#db2777', 22, true);
+      GameAudio.play('explosion');
+      state.enemies = state.enemies.filter(e => e.id !== enemy.id);
+      return;
+    }
+
     let scoreGained = 10 * state.multiplier + (enemy.word ? enemy.word.length * 5 * state.multiplier : 0);
     
     if (enemy.type === 'anomaly') {
@@ -748,9 +757,11 @@ export default function GameCanvas({
   const handleKeyDown = (e) => {
     const state = stateRef.current;
     if (state.isLocalGameOver || state.isPaused) return;
+    if (state.jammedTimer && state.jammedTimer > 0) return; // Controls jammed by anomaly pulsar
 
     const key = e.key.toLowerCase();
     if (key === '1' || key === '2' || key === '3') {
+      if (state.empDrainedTimer && state.empDrainedTimer > 0) return; // Skills locked by EMP
       const slotIdx = key === '1' ? 0 : key === '2' ? 1 : 2;
       triggerSkill(slotIdx);
       return;
@@ -891,6 +902,18 @@ export default function GameCanvas({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    // Aegis Vindicator shield arc block check
+    if (state.bossObj && state.bossObj.name === 'AEGIS VINDICATOR' && enemy.id.startsWith('boss-w-')) {
+      const angle = (Date.now() * 0.0018) % (Math.PI * 2);
+      const diff = (Math.PI * 0.5 - angle + Math.PI * 4) % (Math.PI * 2);
+      if (diff < Math.PI * 0.75) {
+        // Laser blocked by rotating Aegis shield plate!
+        createExplosion(state.bossObj.x, state.bossObj.y + 40, '#ffffff', 8, true);
+        GameAudio.play('hit');
+        return;
+      }
+    }
+
     const charIndex = enemy.targetIndex;
     enemy.targetIndex += 1;
     
@@ -1028,6 +1051,10 @@ export default function GameCanvas({
     state.reflectorTime = Math.max(0, state.reflectorTime - 16.7);
     state.hologramTime = Math.max(0, state.hologramTime - 16.7);
     state.bossShieldTime = Math.max(0, state.bossShieldTime - 16.7);
+    
+    // Decrement frame-based combat timers
+    if (state.jammedTimer && state.jammedTimer > 0) state.jammedTimer -= 1;
+    if (state.empDrainedTimer && state.empDrainedTimer > 0) state.empDrainedTimer -= 1;
 
     // Update shield claim animations
     if (state.shieldClaims && state.shieldClaims.length > 0) {
@@ -1189,6 +1216,8 @@ export default function GameCanvas({
         // Trigger Dreadnought Boss Fight on every 10th wave, or wave 100
         if (state.wave % 10 === 0 || state.wave === 100) {
           triggerBossWarning();
+        } else if (state.wave % 5 === 0) {
+          spawnMiniBossFight();
         } else {
           // Go to next wave or docking station
           handleWaveEndDetection();
@@ -1210,6 +1239,108 @@ export default function GameCanvas({
           fireBossBullet();
         }
         boss.shootTimer = Math.max(60, 160 - state.wave * 10);
+      }
+    }
+
+    // Mini-boss custom behaviors
+    if (state.waveState === 'boss_fight' && state.bossObj && state.bossObj.type === 'mini_boss') {
+      const boss = state.bossObj;
+      
+      // 1. Warp Spectre Teleportation
+      if (boss.name === 'WARP SPECTRE') {
+        boss.teleportTimer = (boss.teleportTimer || 0) + 1;
+        if (boss.teleportTimer >= 200) { // ~3.3 seconds
+          boss.teleportTimer = 0;
+          const oldX = boss.x;
+          boss.x = 100 + Math.random() * (canvas.width - 200);
+          
+          createExplosion(oldX, boss.y, '#38bdf8', 25, true);
+          createExplosion(boss.x, boss.y, '#38bdf8', 25, true);
+          GameAudio.play('laser'); // warp teleport sound
+          
+          // Update words target positions
+          boss.words.forEach(w => {
+            const matchingEnemy = state.enemies.find(e => e.id === w.id);
+            if (matchingEnemy) matchingEnemy.x = boss.x;
+          });
+        }
+      }
+
+      // 2. Thermobaric Devastator fire lanes
+      if (boss.name === 'THERMOBARIC DEVASTATOR') {
+        boss.fireTimer = (boss.fireTimer || 0) + 1;
+        if (boss.fireTimer >= 240) { // ~4 seconds
+          boss.fireTimer = 0;
+          const lanes = ['left', 'center', 'right'];
+          boss.targetFireLane = lanes[Math.floor(Math.random() * lanes.length)];
+          boss.fireWarningTime = 90; // 1.5 seconds warning
+          GameAudio.play('warning');
+        }
+
+        if (boss.targetFireLane) {
+          if (boss.fireWarningTime > 0) {
+            boss.fireWarningTime -= 1;
+            if (boss.fireWarningTime <= 0) {
+              boss.fireActiveTime = 180; // 3 seconds active
+              GameAudio.play('explosionLarge'); // burn roaring blast
+            }
+          } else if (boss.fireActiveTime > 0) {
+            boss.fireActiveTime -= 1;
+            
+            // Damage player ship if in fire lane
+            const localPosition = isMultiplayer 
+              ? players.find(p => p.socketId === socket?.id)?.position || 'center' 
+              : 'center';
+            if (localPosition === boss.targetFireLane) {
+              if (boss.fireActiveTime % 10 === 0) {
+                takeDamage(1.5);
+              }
+            }
+            if (boss.fireActiveTime <= 0) {
+              boss.targetFireLane = null;
+            }
+          }
+        }
+      }
+
+      // 3. EMP Void-Weaver lock active skill hotkeys
+      if (boss.name === 'EMP VOID-WEAVER') {
+        boss.empTimer = (boss.empTimer || 0) + 1;
+        if (boss.empTimer >= 360) { // ~6 seconds
+          boss.empTimer = 0;
+          state.empDrainedTimer = 360; // 6 seconds EMP lockout
+          GameAudio.play('emp');
+          createExplosion(canvas.width / 2, canvas.height / 2, '#fbbf24', 40, true);
+        }
+      }
+
+      // 4. Mirage Phantom Decoy Mirror clones
+      if (boss.name === 'MIRAGE PHANTOM') {
+        boss.decoyTimer = (boss.decoyTimer || 0) + 1;
+        if (boss.decoyTimer >= 400) { // ~6.6 seconds
+          boss.decoyTimer = 0;
+          
+          // Clear old decoy clones
+          state.enemies = state.enemies.filter(e => e.type !== 'mirage_decoy');
+          
+          // Spawn 2 decoy clones
+          const offsets = [-180, 180];
+          offsets.forEach((ox, i) => {
+            const cloneX = Math.max(80, Math.min(canvas.width - 80, boss.x + ox));
+            const decoy = {
+              id: `mirage-decoy-${i}-${Date.now()}`,
+              word: getWordForEnemy('boss', state.wave, state.usedWords),
+              color: 'purple',
+              x: cloneX,
+              y: boss.y,
+              speed: 0,
+              targetIndex: 0,
+              type: 'mirage_decoy'
+            };
+            state.enemies.push(decoy);
+          });
+          GameAudio.play('laser');
+        }
       }
     }
 
@@ -1252,6 +1383,61 @@ export default function GameCanvas({
         }
       }
 
+      // Anomaly active combat threats
+      if (enemy.type === 'anomaly') {
+        // 1. Distortion Pulsar
+        if (!enemy.pulseRings) enemy.pulseRings = [];
+        enemy.pulseTimer = (enemy.pulseTimer || 0) + 1;
+        if (enemy.pulseTimer >= 260) {
+          enemy.pulseTimer = 0;
+          enemy.pulseRings.push({ radius: 10, collided: false });
+          GameAudio.play('emp'); // Shockwave sound
+        }
+
+        // Get player ship coordinates
+        const localPosition = isMultiplayer 
+          ? players.find(p => p.socketId === socket?.id)?.position || 'center' 
+          : 'center';
+        const shipX = getShipX(localPosition, canvas.width);
+        const shipY = canvas.height - 80;
+
+        // Update rings
+        enemy.pulseRings.forEach(ring => {
+          ring.radius += 2.4;
+          const distToPlayer = Math.hypot(shipX - enemy.x, shipY - enemy.y);
+          if (Math.abs(ring.radius - distToPlayer) < 8 && !ring.collided) {
+            ring.collided = true;
+            state.jammedTimer = 72; // Jam controls for 1.2 seconds
+            createExplosion(shipX, shipY, '#8b5cf6', 15, true);
+            GameAudio.play('emp');
+          }
+        });
+        enemy.pulseRings = enemy.pulseRings.filter(r => r.radius < 400);
+
+        // 2. Word Scrambler
+        enemy.scrambleTimer = (enemy.scrambleTimer || 0) + 1;
+        if (enemy.scrambleTimer >= 240) {
+          enemy.scrambleTimer = 0;
+          const candidates = state.enemies.filter(cand => cand.id !== enemy.id && cand.type !== 'shield_linker' && cand.type !== 'boss' && cand.word && cand.word.length > 3);
+          if (candidates.length > 0) {
+            const target = candidates[Math.floor(Math.random() * candidates.length)];
+            const chars = target.word.split('');
+            const i1 = Math.floor(Math.random() * chars.length);
+            let i2 = Math.floor(Math.random() * chars.length);
+            if (i1 === i2) i2 = (i1 + 1) % chars.length;
+            
+            // Swap
+            const tmp = chars[i1];
+            chars[i1] = chars[i2];
+            chars[i2] = tmp;
+            target.word = chars.join('');
+            
+            createExplosion(target.x, target.y, '#8b5cf6', 10, true);
+            GameAudio.play('laser'); // Scramble glitch sound
+          }
+        }
+      }
+
       // Decrement status timers
       if (enemy.freezeTime > 0) enemy.freezeTime -= 16.7;
       if (enemy.slowTime > 0) enemy.slowTime -= 16.7;
@@ -1266,9 +1452,28 @@ export default function GameCanvas({
 
       enemy.y += enemy.speed * baseSpeedMultiplier * multiplayerDifficulty * speedFactor;
       
-      // Elite/interceptor weaving logic
-      if (enemy.type === 'interceptor' && speedFactor > 0) {
-        enemy.x += Math.sin(enemy.y * 0.02) * 2 * speedFactor;
+      if (speedFactor > 0) {
+        enemy.patternAge = (enemy.patternAge || 0) + 1;
+        const pat = enemy.movementPattern || 'straight';
+        
+        if (pat === 'sine') {
+          enemy.x += Math.sin(enemy.y * 0.02) * 1.8 * speedFactor;
+        } else if (pat === 'cosine') {
+          enemy.x += Math.cos(enemy.y * 0.02) * 1.8 * speedFactor;
+        } else if (pat === 'zigzag') {
+          const zigDir = Math.floor(enemy.patternAge / 55) % 2 === 0 ? 1 : -1;
+          enemy.x += zigDir * 1.6 * speedFactor;
+        } else if (pat === 'drift') {
+          enemy.x += Math.sin(enemy.patternAge * 0.007) * 2.2 * speedFactor;
+        }
+        
+        // Elite interceptor fallback weaving
+        if (enemy.type === 'interceptor' && pat === 'straight') {
+          enemy.x += Math.sin(enemy.y * 0.02) * 2 * speedFactor;
+        }
+        
+        // Keep ships inside canvas bounds
+        enemy.x = Math.max(50, Math.min(canvas.width - 50, enemy.x));
       }
 
       // Cruiser shooting bullets logic
@@ -1464,6 +1669,15 @@ export default function GameCanvas({
         else color = 'purple';
       }
 
+      // Choose movement pattern based on chances: 40% straight, 20% sine, 15% cosine, 15% zigzag, 10% drift
+      const rPat = Math.random();
+      let pattern = 'straight';
+      if (rPat < 0.40) pattern = 'straight';
+      else if (rPat < 0.60) pattern = 'sine';
+      else if (rPat < 0.75) pattern = 'cosine';
+      else if (rPat < 0.90) pattern = 'zigzag';
+      else pattern = 'drift';
+
       const enemy = {
         id: enemyId,
         word,
@@ -1474,7 +1688,9 @@ export default function GameCanvas({
         speed,
         targetIndex: 0,
         type,
-        shootCooldown: 150
+        shootCooldown: 150,
+        movementPattern: pattern,
+        patternAge: 0
       };
 
       state.enemies.push(enemy);
@@ -1594,6 +1810,66 @@ export default function GameCanvas({
         hostId: socket.id
       }));
     }
+  };
+
+  // Spawn multiples-of-5 mini-bosses
+  const spawnMiniBossFight = () => {
+    const state = stateRef.current;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    let miniBossName = 'AEGIS VINDICATOR';
+    let miniBossColor = 'white';
+
+    if (state.wave === 5) {
+      miniBossName = 'AEGIS VINDICATOR';
+      miniBossColor = 'white';
+    } else if (state.wave === 15) {
+      miniBossName = 'WARP SPECTRE';
+      miniBossColor = 'blue';
+    } else if (state.wave === 25) {
+      miniBossName = 'THERMOBARIC DEVASTATOR';
+      miniBossColor = 'red';
+    } else if (state.wave === 35) {
+      miniBossName = 'EMP VOID-WEAVER';
+      miniBossColor = 'green';
+    } else if (state.wave === 45) {
+      miniBossName = 'MIRAGE PHANTOM';
+      miniBossColor = 'purple';
+    } else {
+      miniBossName = 'ELITE OVERSEER';
+      miniBossColor = 'purple';
+    }
+
+    // Mini-boss contains a single large target word representing its specific design
+    const bossWords = [{
+      id: 'boss-w-0',
+      word: getWordForEnemy('boss', state.wave, state.usedWords),
+      color: miniBossColor,
+      active: true,
+      completed: false,
+      targetIndex: 0
+    }];
+
+    state.waveState = 'boss_fight';
+    state.bossObj = {
+      id: 'mini-boss',
+      type: 'mini_boss',
+      name: miniBossName,
+      color: miniBossColor,
+      x: canvas.width / 2,
+      y: 120,
+      width: 145,
+      height: 85,
+      health: 100,
+      maxHealth: 100,
+      words: bossWords,
+      phase: 0,
+      shootTimer: 90
+    };
+
+    loadBossWordsAsEnemies(bossWords);
+    GameAudio.play('emp'); // spawn alert sound cue
   };
 
   const loadBossWordsAsEnemies = (bossWords) => {
@@ -2168,7 +2444,10 @@ export default function GameCanvas({
       let bossColor = 'purple';
       let bossLabel = 'COMMAND DREADNOUGHT';
 
-      if (bossTier === 10) {
+      if (boss.type === 'mini_boss') {
+        bossColor = boss.color || 'purple';
+        bossLabel = `MINI-BOSS: ${boss.name}`;
+      } else if (bossTier === 10) {
         bossColor = 'purple';
         bossLabel = 'DREADNOUGHT SENTINEL';
       } else if (bossTier === 20) {
@@ -2196,7 +2475,99 @@ export default function GameCanvas({
       ctx.lineWidth = 3.0;
 
       // Draw custom visual designs based on boss type
-      if (bossTier === 20) {
+      if (boss.type === 'mini_boss') {
+        if (boss.name === 'AEGIS VINDICATOR') {
+          // White defensive plate barge
+          ctx.beginPath();
+          ctx.moveTo(-boss.width / 2, -15);
+          ctx.lineTo(-boss.width / 3, -boss.height / 2);
+          ctx.lineTo(boss.width / 3, -boss.height / 2);
+          ctx.lineTo(boss.width / 2, -15);
+          ctx.lineTo(boss.width / 2, 20);
+          ctx.lineTo(-boss.width / 2, 20);
+          ctx.closePath();
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+          ctx.fill();
+          ctx.stroke();
+
+          // Rotating barrier shield arcs
+          const angle = (Date.now() * 0.0018) % (Math.PI * 2);
+          ctx.save();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 3.0;
+          ctx.shadowColor = '#ffffff';
+          ctx.shadowBlur = 8;
+          ctx.beginPath();
+          ctx.arc(0, 0, 50, angle, angle + Math.PI * 0.75); // 75% segment arc
+          ctx.stroke();
+          ctx.restore();
+        } else if (boss.name === 'WARP SPECTRE') {
+          // Sleek dual-wing cyan energy ship
+          ctx.beginPath();
+          ctx.moveTo(0, -25);
+          ctx.lineTo(-boss.width / 2, 10);
+          ctx.lineTo(-20, -5);
+          ctx.lineTo(0, 20);
+          ctx.lineTo(20, -5);
+          ctx.lineTo(boss.width / 2, 10);
+          ctx.closePath();
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.08)';
+          ctx.fill();
+          ctx.stroke();
+          
+          // Center matrix core
+          ctx.strokeStyle = '#38bdf8';
+          ctx.beginPath();
+          ctx.arc(0, 0, 10, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (boss.name === 'THERMOBARIC DEVASTATOR') {
+          // Heavy firebomber ship
+          ctx.beginPath();
+          ctx.rect(-boss.width / 2, -boss.height / 2, boss.width, boss.height);
+          ctx.moveTo(-boss.width / 2, 0); ctx.lineTo(boss.width / 2, 0);
+          ctx.stroke();
+          
+          // Exhaust ports
+          ctx.fillStyle = 'rgba(239, 68, 68, 0.2)';
+          ctx.fillRect(-15, 10, 30, 15);
+        } else if (boss.name === 'EMP VOID-WEAVER') {
+          // Spiked neon-yellow shock cruiser
+          ctx.beginPath();
+          ctx.moveTo(0, -30);
+          ctx.lineTo(boss.width / 2, 10);
+          ctx.lineTo(10, 5);
+          ctx.lineTo(0, 30);
+          ctx.lineTo(-10, 5);
+          ctx.lineTo(-boss.width / 2, 10);
+          ctx.closePath();
+          ctx.fillStyle = 'rgba(251, 191, 36, 0.08)';
+          ctx.fill();
+          ctx.stroke();
+          
+          // Electric arcs radiating
+          ctx.strokeStyle = '#f59e0b';
+          ctx.lineWidth = 1.0;
+          ctx.beginPath();
+          for (let a = 0; a < 4; a++) {
+            const ang = Math.random() * Math.PI * 2;
+            const dist = 30 + Math.random() * 20;
+            ctx.moveTo(0, 0);
+            ctx.lineTo(Math.cos(ang) * dist, Math.sin(ang) * dist);
+          }
+          ctx.stroke();
+        } else if (boss.name === 'MIRAGE PHANTOM') {
+          // Ghostly split chassis
+          ctx.beginPath();
+          ctx.moveTo(-20, -20); ctx.lineTo(-boss.width / 2, 20); ctx.lineTo(-10, 10);
+          ctx.moveTo(20, -20); ctx.lineTo(boss.width / 2, 20); ctx.lineTo(10, 10);
+          ctx.stroke();
+        } else {
+          // Fallback mini-boss
+          ctx.beginPath();
+          ctx.rect(-boss.width / 2, -boss.height / 2, boss.width, boss.height);
+          ctx.stroke();
+        }
+      } else if (bossTier === 20) {
         // Chronos Dominator
         const rot = Date.now() * 0.001;
         ctx.beginPath();
@@ -2539,6 +2910,32 @@ export default function GameCanvas({
         ctx.lineTo(-20, 12);
         ctx.stroke();
         ctx.restore();
+
+        // Draw expanding gravity rings
+        if (enemy.pulseRings) {
+          enemy.pulseRings.forEach(ring => {
+            ctx.save();
+            ctx.strokeStyle = `rgba(139, 92, 246, ${Math.max(0, 1.0 - ring.radius / 380)})`;
+            ctx.shadowColor = '#8b5cf6';
+            ctx.shadowBlur = 6;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(0, 0, ring.radius, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+          });
+        }
+      } else if (enemy.type === 'mirage_decoy') {
+        // Mirage Decoy split hull
+        ctx.save();
+        ctx.strokeStyle = 'rgba(219, 39, 119, 0.7)';
+        ctx.shadowColor = '#db2777';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(-15, -15); ctx.lineTo(-45, 15); ctx.lineTo(-8, 8);
+        ctx.moveTo(15, -15); ctx.lineTo(45, 15); ctx.lineTo(8, 8);
+        ctx.stroke();
+        ctx.restore();
       } else if (enemy.type === 'meteor') {
         // Fiery space debris
         ctx.fillStyle = '#ff781e';
@@ -2702,6 +3099,42 @@ export default function GameCanvas({
         bullet.y += bullet.vy * speedFactor;
       }
     });
+
+    // Thermobaric Devastator fire lanes warnings/flames drawing
+    if (state.bossObj && state.bossObj.name === 'THERMOBARIC DEVASTATOR') {
+      const b = state.bossObj;
+      if (b.targetFireLane) {
+        const laneX = getShipX(b.targetFireLane, canvas.width);
+        ctx.save();
+        if (b.fireWarningTime > 0) {
+          // Pulsing warning overlay
+          const alpha = Math.abs(Math.sin(Date.now() / 60)) * 0.15;
+          ctx.fillStyle = `rgba(249, 115, 22, ${alpha})`;
+          ctx.fillRect(laneX - 60, 0, 120, canvas.height);
+          
+          ctx.fillStyle = '#f97316';
+          ctx.font = '700 12px Orbitron, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('FIRE ZONE APPROACHING', laneX, canvas.height - 180);
+        } else if (b.fireActiveTime > 0) {
+          // Active fire wall
+          const alpha = 0.15 + Math.random() * 0.1;
+          ctx.fillStyle = `rgba(239, 68, 68, ${alpha})`;
+          ctx.fillRect(laneX - 60, 0, 120, canvas.height);
+          
+          // Draw crackling fire lines
+          ctx.strokeStyle = '#ef4444';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          for (let f = 0; f < 5; f++) {
+            ctx.moveTo(laneX - 40 + Math.random() * 80, canvas.height);
+            ctx.lineTo(laneX - 40 + Math.random() * 80, canvas.height - 120 - Math.random() * 150);
+          }
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+    }
 
     // Draw Player Ship(s)
     const localPosition = isMultiplayer 
@@ -3231,7 +3664,8 @@ export default function GameCanvas({
             const skill = SKILLS_DB.find(s => s.id === skId);
             if (!skill) return null;
 
-            const isUsable = charge >= skill.cost && cooldowns[idx] === 0;
+            const empLock = stateRef.current && stateRef.current.empDrainedTimer > 0;
+            const isUsable = charge >= skill.cost && cooldowns[idx] === 0 && !empLock;
             const isOnCooldown = cooldowns[idx] > 0;
 
             const getActiveDuration = (sId) => {
@@ -3248,8 +3682,8 @@ export default function GameCanvas({
 
             const actTime = getActiveDuration(skill.id);
 
-            let borderStyle = `1px solid ${skill.color}`;
-            let shadowStyle = `0 0 6px ${skill.color}15`;
+            let borderStyle = empLock ? '1px dashed #f59e0b' : `1px solid ${skill.color}`;
+            let shadowStyle = empLock ? '0 0 8px #f59e0b35' : `0 0 6px ${skill.color}15`;
             if (isUsable) {
               shadowStyle = `0 0 10px ${skill.color}45`;
             }
@@ -3274,16 +3708,39 @@ export default function GameCanvas({
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: skill.color,
-                    opacity: isUsable ? 0.75 : 0.12,
+                    color: empLock ? '#fbbf24' : skill.color,
+                    opacity: empLock ? 0.65 : (isUsable ? 0.75 : 0.12),
                     boxShadow: shadowStyle,
                     transition: 'all 0.3s ease',
                     position: 'relative',
                     overflow: 'hidden'
                   }}
-                  title={`${skill.name} - Cost: ${skill.cost}%`}
+                  title={empLock ? 'Locked by EMP shock' : `${skill.name} - Cost: ${skill.cost}%`}
                 >
-                  {skill.svgIcon(skill.color)}
+                  {skill.svgIcon(empLock ? '#f59e0b' : skill.color)}
+
+                  {empLock && (
+                    <div 
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        background: 'rgba(245, 158, 11, 0.35)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#ffffff',
+                        fontSize: '7.5px',
+                        fontWeight: 900,
+                        fontFamily: 'var(--font-display)',
+                        letterSpacing: '0.5px'
+                      }}
+                    >
+                      EMP
+                    </div>
+                  )}
 
                   {/* Cooldown Wipe Circle */}
                   {isOnCooldown && (
