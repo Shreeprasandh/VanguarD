@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { GameAudio } from '../game/audio';
 
 export default function MainMenu({
   username,
   shipColor,
   isMobileDevice = false,
+  isFirstLoad = false,
   onStartSolo,
   onCreateRoom,
   onJoinRoom,
@@ -16,6 +17,10 @@ export default function MainMenu({
   const [showTeamOptions, setShowTeamOptions] = useState(false);
   const [roomCodeInput, setRoomCodeInput] = useState('');
   const [hoveredBtn, setHoveredBtn] = useState(null); // 'solo', 'multi', 'leader', 'back', 'create', 'join'
+
+  let shipStrokeColor = 'var(--neon-blue)';
+  if (shipColor === 'red') shipStrokeColor = 'var(--neon-red)';
+  if (shipColor === 'green') shipStrokeColor = 'var(--neon-green)';
 
   const handleButtonClick = () => {
     GameAudio.play('click');
@@ -192,7 +197,18 @@ export default function MainMenu({
       `}</style>
 
       {/* Decorative Title Block */}
-      <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: isMobileDevice ? '1.8rem' : '4rem', transition: 'margin-bottom 0.3s ease' }}>
+      <div 
+        className={isFirstLoad ? 'boot-ui-animate' : ''}
+        style={{ 
+          position: 'relative', 
+          display: 'flex', 
+          flexDirection: 'column', 
+          alignItems: 'center', 
+          marginBottom: isMobileDevice ? '1.8rem' : '4rem', 
+          transition: 'margin-bottom 0.3s ease',
+          opacity: isFirstLoad ? 0 : 1
+        }}
+      >
         {/* Sleek top corner lines */}
         <div style={{ position: 'absolute', top: '-15px', left: '-20px', width: '24px', height: '8px', borderTop: '1px solid rgba(255,255,255,0.12)', borderLeft: '1px solid rgba(255,255,255,0.12)' }} />
         <div style={{ position: 'absolute', top: '-15px', right: '-20px', width: '24px', height: '8px', borderTop: '1px solid rgba(255,255,255,0.12)', borderRight: '1px solid rgba(255,255,255,0.12)' }} />
@@ -277,6 +293,7 @@ export default function MainMenu({
         /* Desktop menu layout */
         <>
           {/* Dynamic Animated Avatar Profile Trigger */}
+          {/* Dynamic Animated Avatar Profile Trigger */}
           <div 
             onClick={() => { handleButtonClick(); onOpenEditProfile(); }}
             style={{
@@ -288,24 +305,51 @@ export default function MainMenu({
             }}
             title="Click to customize profile"
           >
-            {getShipSvg(shipColor)}
-            <span style={{ 
-              fontFamily: 'var(--font-display)',
-              fontSize: '0.85rem',
-              fontWeight: '500',
-              letterSpacing: '3px',
-              color: 'var(--text-secondary)',
-              marginTop: '1.2rem',
-              textTransform: 'uppercase',
-              transition: 'color 0.2s'
-            }} className="profile-trigger-name">
+            <div 
+              className={isFirstLoad ? 'boot-ship-animate' : ''}
+              style={{ position: 'relative', display: 'flex', justifyContent: 'center' }}
+            >
+              {getShipSvg(shipColor)}
+              {isFirstLoad && (
+                <div 
+                  className="ship-trail ship-trail-animate" 
+                  style={{ '--ship-glow': shipStrokeColor }}
+                >
+                  <div className="spark spark-1" />
+                  <div className="spark spark-2" />
+                  <div className="spark spark-3" />
+                </div>
+              )}
+            </div>
+            <span 
+              className={`profile-trigger-name ${isFirstLoad ? 'boot-ui-animate' : ''}`}
+              style={{ 
+                fontFamily: 'var(--font-display)',
+                fontSize: '0.85rem',
+                fontWeight: '500',
+                letterSpacing: '3px',
+                color: 'var(--text-secondary)',
+                marginTop: '1.2rem',
+                textTransform: 'uppercase',
+                transition: 'color 0.2s',
+                opacity: isFirstLoad ? 0 : 1
+              }}
+            >
               {username}
             </span>
           </div>
 
           {/* Main Buttons Block */}
           {!showTeamOptions ? (
-            <div style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
+            <div 
+              className={isFirstLoad ? 'boot-ui-animate' : ''} 
+              style={{ 
+                width: '100%', 
+                display: 'flex', 
+                flexDirection: 'column',
+                opacity: isFirstLoad ? 0 : 1 
+              }}
+            >
               <div className="menu-item-row">
                 {renderPointer('solo')}
                 <button 
@@ -417,30 +461,37 @@ export default function MainMenu({
           )}
           
           {/* Story Link on Bottom Left (fixed position for desktop) */}
-          <button 
-            className="leaderboard-link"
+          <div 
+            className={isFirstLoad ? 'boot-ui-animate' : ''}
             style={{
               position: 'fixed',
               bottom: '1.5rem',
               left: '1.5rem',
-              marginTop: 0,
-              opacity: 0.35,
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--text-secondary)',
-              fontFamily: 'var(--font-display)',
-              fontSize: '0.8rem',
-              letterSpacing: '2px',
-              textTransform: 'uppercase',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              outline: 'none',
-              zIndex: 20
+              zIndex: 20,
+              opacity: isFirstLoad ? 0 : 1
             }}
-            onClick={() => { handleButtonClick(); onOpenStory(); }}
           >
-            Story
-          </button>
+            <button 
+              className="leaderboard-link"
+              style={{
+                marginTop: 0,
+                opacity: 0.35,
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-secondary)',
+                fontFamily: 'var(--font-display)',
+                fontSize: '0.8rem',
+                letterSpacing: '2px',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                outline: 'none'
+              }}
+              onClick={() => { handleButtonClick(); onOpenStory(); }}
+            >
+              Story
+            </button>
+          </div>
         </>
       )}
     </div>

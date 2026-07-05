@@ -30,11 +30,13 @@ export default function App() {
 
   // App routing state
   const [screen, setScreen] = useState('menu'); // 'menu', 'lobby', 'playing', 'gameover'
+  const [transitionState, setTransitionState] = useState('idle'); // 'idle', 'warp-in', 'warp-out'
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showStory, setShowStory] = useState(false);
   const [showInfoPopup, setShowInfoPopup] = useState(false);
-  const [muted, setMuted] = useState(false);
+  const [muted, setMuted] = useState(true);
+  const [isFirstLoad, setIsFirstLoad] = useState(true);
 
   // Multiplayer room state
   const [isMultiplayer, setIsMultiplayer] = useState(false);
@@ -62,33 +64,48 @@ export default function App() {
     return () => window.removeEventListener('resize', checkDevice);
   }, []);
 
-  // Initialize Audio settings on first interaction
+  // Manage background menu/lobby theme audio lifecycle
   useEffect(() => {
-    const triggerAudioInit = () => {
-      GameAudio.init();
+    GameAudio.init();
+
+    // Auto-play menu theme immediately after startup if in menu/lobby
+    const autoPlayTimer = setTimeout(() => {
       if (screen === 'menu' || screen === 'lobby') {
         GameAudio.playMusic('menu_theme');
       }
-      window.removeEventListener('click', triggerAudioInit);
-      window.removeEventListener('keydown', triggerAudioInit);
-    };
-    window.addEventListener('click', triggerAudioInit);
-    window.addEventListener('keydown', triggerAudioInit);
-    return () => {
-      window.removeEventListener('click', triggerAudioInit);
-      window.removeEventListener('keydown', triggerAudioInit);
-    };
-  }, [screen]);
+    }, 0);
 
-  // Play menu theme music when on menu or lobby screens
-  useEffect(() => {
-    if (screen === 'menu' || screen === 'lobby') {
-      GameAudio.playMusic('menu_theme');
-    } else {
+    // Fallback user gesture to force play if blocked by browser
+    const forcePlayOnInteraction = () => {
+      if (screen === 'menu' || screen === 'lobby') {
+        GameAudio.playMusic('menu_theme');
+      }
+      window.removeEventListener('click', forcePlayOnInteraction);
+      window.removeEventListener('keydown', forcePlayOnInteraction);
+      window.removeEventListener('touchstart', forcePlayOnInteraction);
+      window.removeEventListener('mousemove', forcePlayOnInteraction);
+      window.removeEventListener('mouseover', forcePlayOnInteraction);
+    };
+
+    window.addEventListener('click', forcePlayOnInteraction);
+    window.addEventListener('keydown', forcePlayOnInteraction);
+    window.addEventListener('touchstart', forcePlayOnInteraction);
+    window.addEventListener('mousemove', forcePlayOnInteraction);
+    window.addEventListener('mouseover', forcePlayOnInteraction);
+
+    // Stop menu theme if leaving menu/lobby
+    if (screen !== 'menu' && screen !== 'lobby') {
+      clearTimeout(autoPlayTimer);
       GameAudio.stopMenuTheme();
     }
+
     return () => {
-      GameAudio.stopMenuTheme();
+      clearTimeout(autoPlayTimer);
+      window.removeEventListener('click', forcePlayOnInteraction);
+      window.removeEventListener('keydown', forcePlayOnInteraction);
+      window.removeEventListener('touchstart', forcePlayOnInteraction);
+      window.removeEventListener('mousemove', forcePlayOnInteraction);
+      window.removeEventListener('mouseover', forcePlayOnInteraction);
     };
   }, [screen]);
 
@@ -128,14 +145,14 @@ export default function App() {
               setRoomCode(data.roomCode);
               setPlayers(data.players);
               setIsMultiplayer(true);
-              setScreen('lobby');
+              changeScreenWithFade('lobby');
               break;
 
             case 'ROOM_JOINED':
               setRoomCode(data.roomCode);
               setPlayers(data.players);
               setIsMultiplayer(true);
-              setScreen('lobby');
+              changeScreenWithFade('lobby');
               break;
 
             case 'ROOM_PLAYERS_UPDATE':
@@ -144,7 +161,7 @@ export default function App() {
 
             case 'GAME_STARTED':
               setPlayers(data.players);
-              setScreen('playing');
+              changeScreenWithFade('playing');
               break;
 
             case 'ROOM_ERROR':
@@ -157,12 +174,12 @@ export default function App() {
 
             case 'INIT_DOCK':
               setGameStats(prev => ({ ...prev, wave: data.wave }));
-              setScreen('docking');
+              changeScreenWithFade('docking');
               break;
 
             case 'LAUNCH_NEXT_WAVE':
               setGameStats(prev => ({ ...prev, wave: prev.wave + 1 }));
-              setScreen('playing');
+              changeScreenWithFade('playing');
               break;
           }
         } catch (e) {
@@ -210,15 +227,30 @@ export default function App() {
     }
   };
 
+  // Handle transitions with subtle screen fade animations
+  const changeScreenWithFade = (newScreen) => {
+    setIsFirstLoad(false); // Clear first load state on any screen change
+    setTransitionState('fade-in');
+    setTimeout(() => {
+      setScreen(newScreen);
+      setTimeout(() => {
+        setTransitionState('fade-out');
+        setTimeout(() => {
+          setTransitionState('idle');
+        }, 500);
+      }, 80);
+    }, 500);
+  };
+
   const handleStartSolo = () => {
     setIsMultiplayer(false);
     setGameStats({ score: 0, wave: 1 });
-    setScreen('playing');
+    changeScreenWithFade('playing');
   };
 
   const handleDockStart = (completedWave) => {
     setGameStats(prev => ({ ...prev, wave: completedWave }));
-    setScreen('docking');
+    changeScreenWithFade('docking');
   };
 
   const handleDockContinue = (newColor, newSkills) => {
@@ -234,7 +266,7 @@ export default function App() {
     } else {
       const nextWave = gameStats.wave + 1;
       setGameStats(prev => ({ ...prev, wave: nextWave }));
-      setScreen('playing');
+      changeScreenWithFade('playing');
     }
   };
 
@@ -275,7 +307,7 @@ export default function App() {
     setIsMultiplayer(false);
     setRoomCode('');
     setPlayers([]);
-    setScreen('menu');
+    changeScreenWithFade('menu');
   };
 
   const handleScoreUpdate = (score, wave) => {
@@ -284,7 +316,7 @@ export default function App() {
 
   const handleGameOver = (finalScore, waveReached) => {
     setGameStats({ score: finalScore, wave: waveReached });
-    setScreen('gameover');
+    changeScreenWithFade('gameover');
 
     // Submit score to persistent leaderboard on game over if solo
     if (!isMultiplayer && socketRef.current && socketConnected) {
@@ -300,7 +332,7 @@ export default function App() {
     if (isMultiplayer) {
       handleLeaveRoom();
     } else {
-      setScreen('menu');
+      changeScreenWithFade('menu');
     }
     
     // Reset our scores back to 0 on the leaderboard
@@ -327,6 +359,7 @@ export default function App() {
             username={username}
             shipColor={shipColor}
             isMobileDevice={isMobileDevice}
+            isFirstLoad={isFirstLoad}
             onStartSolo={handleStartSolo}
             onCreateRoom={handleCreateRoom}
             onJoinRoom={handleJoinRoom}
@@ -413,7 +446,10 @@ export default function App() {
 
       {/* Global Sound & Info Actions - Hide during play mode (GameCanvas renders its own grouped controls) */}
       {screen !== 'playing' && (
-        <div className="system-actions">
+        <div 
+          className={`system-actions ${isFirstLoad ? 'boot-ui-animate' : ''}`}
+          style={{ opacity: isFirstLoad ? 0 : 1 }}
+        >
           <button 
             className="system-btn" 
             onClick={toggleMute} 
@@ -476,6 +512,9 @@ export default function App() {
           onClose={() => setShowInfoPopup(false)}
         />
       )}
+
+      {/* Subtle Screen Fade Transition Overlay */}
+      <div className={`fade-transition-overlay ${transitionState}`} />
     </div>
   );
 }
