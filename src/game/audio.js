@@ -37,6 +37,7 @@ class AudioManager {
     this.ingameAudioCtx = null;
     this.ingameBassInterval = null;
     this.ingameHihatInterval = null;
+    this.ingameChordInterval = null;
   }
 
   init() {
@@ -597,33 +598,47 @@ class AudioManager {
       delayGain.connect(delayNode);
       delayGain.connect(ctx.destination);
       
-      const playMelody = () => {
-        if (!this.menuAudioCtx || ctx.state === 'suspended') return;
-        const t = ctx.currentTime;
-        const scale = [440, 523.25, 587.33, 659.25, 783.99, 880];
-        const freq = scale[Math.floor(Math.random() * scale.length)];
-        
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(freq, t);
-        
-        gain.gain.setValueAtTime(0.025, t);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
-        
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        gain.connect(delayNode);
-        
-        osc.start(t);
-        osc.stop(t + 1.3);
-      };
+      // Hand-crafted weeping emotional melody phrases synchronized precisely with chords (8 beats/6.0s duration)
+      const melodyPhrases = [
+        // Progression 0 (Am7): E5 -> D5 -> C5 -> B4 -> A4 (Nostalgic descent)
+        [
+          { delay: 0.0, freq: 659.25, dur: 1.0 },
+          { delay: 1.0, freq: 587.33, dur: 0.8 },
+          { delay: 1.8, freq: 523.25, dur: 0.8 },
+          { delay: 2.6, freq: 493.88, dur: 0.8 },
+          { delay: 3.4, freq: 440.00, dur: 2.2 }
+        ],
+        // Progression 1 (Fmaj7): C5 -> D5 -> E5 -> G5 -> E5 (Memories and hope)
+        [
+          { delay: 0.0, freq: 523.25, dur: 1.0 },
+          { delay: 1.0, freq: 587.33, dur: 0.8 },
+          { delay: 1.8, freq: 659.25, dur: 0.8 },
+          { delay: 2.6, freq: 783.99, dur: 0.8 },
+          { delay: 3.4, freq: 659.25, dur: 2.2 }
+        ],
+        // Progression 2 (Cmaj7): G5 -> E5 -> D5 -> C5 -> E5 (The Warm Sanctuary)
+        [
+          { delay: 0.0, freq: 783.99, dur: 1.0 },
+          { delay: 1.0, freq: 659.25, dur: 0.8 },
+          { delay: 1.8, freq: 587.33, dur: 0.8 },
+          { delay: 2.6, freq: 523.25, dur: 0.8 },
+          { delay: 3.4, freq: 659.25, dur: 2.2 }
+        ],
+        // Progression 3 (G7): D5 -> C5 -> B4 -> G4 -> A4 (Nostalgic resolution/loop back)
+        [
+          { delay: 0.0, freq: 587.33, dur: 1.0 },
+          { delay: 1.0, freq: 523.25, dur: 0.8 },
+          { delay: 1.8, freq: 493.88, dur: 0.8 },
+          { delay: 2.6, freq: 392.00, dur: 0.8 },
+          { delay: 3.4, freq: 440.00, dur: 2.2 }
+        ]
+      ];
       
       const progressions = [
-        [220, 261.63, 329.63, 392],
-        [174.61, 220, 261.63, 349.23],
-        [261.63, 329.63, 392, 493.88],
-        [196, 246.94, 293.66, 392]
+        [220, 261.63, 329.63, 392],      // Am7
+        [174.61, 220, 261.63, 349.23],   // Fmaj7
+        [261.63, 329.63, 392, 493.88],   // Cmaj7
+        [196, 246.94, 293.66, 392]       // G7
       ];
       let progIdx = 0;
       
@@ -631,8 +646,10 @@ class AudioManager {
         if (!this.menuAudioCtx || ctx.state === 'suspended') return;
         const t = ctx.currentTime;
         const chord = progressions[progIdx];
+        const phrase = melodyPhrases[progIdx];
         progIdx = (progIdx + 1) % progressions.length;
         
+        // Play Chords in background
         chord.forEach(freq => {
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
@@ -641,8 +658,8 @@ class AudioManager {
           osc.frequency.setValueAtTime(freq / 2, t);
           
           gain.gain.setValueAtTime(0.0, t);
-          gain.gain.linearRampToValueAtTime(0.03, t + 1.5);
-          gain.gain.linearRampToValueAtTime(0.03, t + 4.5);
+          gain.gain.linearRampToValueAtTime(0.025, t + 1.2);
+          gain.gain.linearRampToValueAtTime(0.025, t + 4.5);
           gain.gain.exponentialRampToValueAtTime(0.001, t + 6.0);
           
           osc.connect(gain);
@@ -650,6 +667,27 @@ class AudioManager {
           
           osc.start(t);
           osc.stop(t + 6.1);
+        });
+
+        // Play Hand-Crafted weeping melody synchronized with chord timing
+        phrase.forEach(note => {
+          const noteTime = t + note.delay;
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(note.freq, noteTime);
+          
+          gain.gain.setValueAtTime(0.0, noteTime);
+          gain.gain.linearRampToValueAtTime(0.022, noteTime + 0.05); // soft chime pluck
+          gain.gain.exponentialRampToValueAtTime(0.001, noteTime + note.dur);
+          
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          gain.connect(delayNode);
+          
+          osc.start(noteTime);
+          osc.stop(noteTime + note.dur + 0.1);
         });
       };
       
@@ -669,7 +707,6 @@ class AudioManager {
         osc.stop(t + 0.2);
       };
       
-      this.menuMelodyInterval = setInterval(playMelody, 800);
       this.menuChordInterval = setInterval(playChords, 6000);
       this.menuPulseInterval = setInterval(playPulse, 1500);
       
@@ -681,10 +718,8 @@ class AudioManager {
   }
 
   stopMenuTheme() {
-    if (this.menuMelodyInterval) clearInterval(this.menuMelodyInterval);
     if (this.menuChordInterval) clearInterval(this.menuChordInterval);
     if (this.menuPulseInterval) clearInterval(this.menuPulseInterval);
-    this.menuMelodyInterval = null;
     this.menuChordInterval = null;
     this.menuPulseInterval = null;
     
@@ -707,10 +742,18 @@ class AudioManager {
       const ctx = this.ingameAudioCtx;
       
       const bassNotes = [
-        110.00, 110.00, 130.81, 146.83,
-        110.00, 110.00, 98.00, 87.31
+        110.00, 110.00, 130.81, 146.83, // A2, A2, C3, D3 (fully audible bass register)
+        110.00, 110.00, 98.00, 87.31    // A2, A2, G2, F2
       ];
       let noteIdx = 0;
+
+      const ingameChords = [
+        [220.00, 261.63, 329.63], // Am
+        [146.83, 174.61, 220.00], // Dm
+        [261.63, 329.63, 392.00], // C
+        [164.81, 196.00, 246.94]  // Em
+      ];
+      let chordIdx = 0;
       
       const playBassBeat = () => {
         if (!this.ingameAudioCtx || ctx.state === 'suspended') return;
@@ -721,22 +764,48 @@ class AudioManager {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(freq / 2, t);
+        osc.frequency.setValueAtTime(freq, t);
         
         const filter = ctx.createBiquadFilter();
         filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(150, t);
+        filter.frequency.setValueAtTime(300, t);
         
         gain.gain.setValueAtTime(0.0, t);
-        gain.gain.linearRampToValueAtTime(0.06, t + 0.05);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+        gain.gain.linearRampToValueAtTime(0.08, t + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
         
         osc.connect(filter);
         filter.connect(gain);
         gain.connect(ctx.destination);
         
         osc.start(t);
-        osc.stop(t + 0.48);
+        osc.stop(t + 0.4);
+      };
+
+      const playChords = () => {
+        if (!this.ingameAudioCtx || ctx.state === 'suspended') return;
+        const t = ctx.currentTime;
+        const chord = ingameChords[chordIdx];
+        chordIdx = (chordIdx + 1) % ingameChords.length;
+        
+        chord.forEach(freq => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, t);
+          
+          gain.gain.setValueAtTime(0.0, t);
+          gain.gain.linearRampToValueAtTime(0.02, t + 1.0);
+          gain.gain.linearRampToValueAtTime(0.02, t + 3.0);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + 4.0);
+          
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          
+          osc.start(t);
+          osc.stop(t + 4.1);
+        });
       };
       
       const playHihat = () => {
@@ -751,18 +820,21 @@ class AudioManager {
         filter.type = 'highpass';
         filter.frequency.setValueAtTime(8000, t);
         
-        gain.gain.setValueAtTime(0.004, t);
-        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+        gain.gain.setValueAtTime(0.003, t);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
         
         osc.connect(filter);
         filter.connect(gain);
         gain.connect(ctx.destination);
         osc.start(t);
-        osc.stop(t + 0.06);
+        osc.stop(t + 0.05);
       };
       
       this.ingameBassInterval = setInterval(playBassBeat, 500);
       this.ingameHihatInterval = setInterval(playHihat, 250);
+      this.ingameChordInterval = setInterval(playChords, 4000);
+
+      playChords();
     } catch (e) {
       console.error('Ingame synth theme initialization failed:', e);
     }
@@ -771,8 +843,10 @@ class AudioManager {
   stopIngameSynthTheme() {
     if (this.ingameBassInterval) clearInterval(this.ingameBassInterval);
     if (this.ingameHihatInterval) clearInterval(this.ingameHihatInterval);
+    if (this.ingameChordInterval) clearInterval(this.ingameChordInterval);
     this.ingameBassInterval = null;
     this.ingameHihatInterval = null;
+    this.ingameChordInterval = null;
     
     if (this.ingameAudioCtx) {
       try {
