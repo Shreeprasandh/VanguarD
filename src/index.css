@@ -759,3 +759,136 @@ body::-webkit-scrollbar,
   0% { opacity: 0; transform: translateY(5px); }
   100% { opacity: 1; transform: translateY(0); }
 }
+
+/* Server Wakeup Overlay Modal */
+.wakeup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(10, 10, 15, 0.85);
+  backdrop-filter: blur(12px);
+  z-index: 10000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-family: 'Orbitron', 'Consolas', monospace;
+  color: #fff;
+}
+
+.wakeup-modal {
+  background: rgba(18, 18, 29, 0.95);
+  border: 1px solid var(--neon-blue);
+  box-shadow: 0 0 25px rgba(51, 204, 255, 0.35);
+  border-radius: 12px;
+  width: 90%;
+  max-width: 520px;
+  padding: 2.5rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  animation: uiFadeIn 0.5s ease-out;
+}
+
+.wakeup-header {
+  margin-bottom: 2rem;
+  border-bottom: 1px dashed rgba(51, 204, 255, 0.2);
+  padding-bottom: 1rem;
+}
+
+.wakeup-glitch-text {
+  color: var(--neon-blue);
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-shadow: 0 0 8px rgba(51, 204, 255, 0.6);
+}
+
+.wakeup-progress-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 2rem;
+  margin: 2.5rem 0;
+  position: relative;
+}
+
+.wakeup-spinner {
+  width: 72px;
+  height: 72px;
+  border: 3px solid rgba(51, 204, 255, 0.15);
+  border-top-color: var(--neon-blue);
+  border-radius: 50%;
+  animation: spin 1.2s linear infinite;
+  box-shadow: 0 0 15px rgba(51, 204, 255, 0.1);
+}
+
+.wakeup-countdown-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.wakeup-countdown-num {
+  font-size: 2.8rem;
+  font-weight: 700;
+  color: var(--neon-green);
+  text-shadow: 0 0 12px rgba(57, 255, 20, 0.5);
+  line-height: 1;
+}
+
+.wakeup-countdown-sec {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-top: 0.2rem;
+}
+
+.wakeup-title {
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 3px;
+  margin-bottom: 0.75rem;
+  text-transform: uppercase;
+}
+
+.wakeup-text {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  margin-bottom: 2rem;
+}
+
+.wakeup-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 6px;
+  padding: 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.wakeup-signal-dot {
+  width: 8px;
+  height: 8px;
+  background-color: var(--neon-blue);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--neon-blue);
+}
+
+.wakeup-status-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}

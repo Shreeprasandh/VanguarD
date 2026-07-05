@@ -47,6 +47,8 @@ export default function App() {
 
   const socketRef = useRef(null);
   const [socketConnected, setSocketConnected] = useState(false);
+  const [showServerWakeup, setShowServerWakeup] = useState(false);
+  const [serverWakeupCountdown, setServerWakeupCountdown] = useState(45);
 
   // Gameplay scoring caches
   const [gameStats, setGameStats] = useState({ score: 0, wave: 1 });
@@ -120,13 +122,26 @@ export default function App() {
     const socketUrl = `${protocol}//${host}`;
     console.log(`Connecting to WebSocket: ${socketUrl}`);
 
+    let socketOpen = false;
+    let wakeupTimer = null;
+
     const connect = () => {
+      if (wakeupTimer) clearTimeout(wakeupTimer);
+      wakeupTimer = setTimeout(() => {
+        if (!socketOpen) {
+          setShowServerWakeup(true);
+        }
+      }, 1800);
+
       const socket = new WebSocket(socketUrl);
       socketRef.current = socket;
 
       socket.onopen = () => {
         console.log('WebSocket connected!');
+        socketOpen = true;
         setSocketConnected(true);
+        setShowServerWakeup(false);
+        if (wakeupTimer) clearTimeout(wakeupTimer);
         // Register current username on connect
         socket.send(JSON.stringify({
           type: 'REGISTER',
@@ -198,7 +213,9 @@ export default function App() {
 
       socket.onclose = () => {
         console.log('WebSocket disconnected. Reconnecting in 3s...');
+        socketOpen = false;
         setSocketConnected(false);
+        if (wakeupTimer) clearTimeout(wakeupTimer);
         setTimeout(connect, 3000);
       };
 
@@ -210,9 +227,32 @@ export default function App() {
     connect();
 
     return () => {
+      if (wakeupTimer) clearTimeout(wakeupTimer);
       if (socketRef.current) socketRef.current.close();
     };
   }, []);
+
+  // Server wakeup countdown interval ticker
+  useEffect(() => {
+    let interval = null;
+    if (showServerWakeup && !socketConnected) {
+      setServerWakeupCountdown(45);
+      interval = setInterval(() => {
+        setServerWakeupCountdown(prev => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else if (socketConnected) {
+      setShowServerWakeup(false);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [showServerWakeup, socketConnected]);
 
   // Update profile handler
   const handleSaveProfile = (newUsername, newColor, newSkills) => {
@@ -528,6 +568,33 @@ export default function App() {
         <InfoPopup
           onClose={() => setShowInfoPopup(false)}
         />
+      )}
+
+      {/* Server Wakeup Overlay Modal */}
+      {showServerWakeup && !socketConnected && (
+        <div className="wakeup-overlay">
+          <div className="wakeup-modal">
+            <div className="wakeup-header">
+              <span className="wakeup-glitch-text pulse-slow">[ SIGNAL INTERRUPT - WAKING CORE ]</span>
+            </div>
+            <div className="wakeup-progress-container">
+              <div className="wakeup-spinner" />
+              <div className="wakeup-countdown-box">
+                <span className="wakeup-countdown-num">{serverWakeupCountdown}</span>
+                <span className="wakeup-countdown-sec">sec</span>
+              </div>
+            </div>
+            <div className="wakeup-title">ESTABLISHING HYPER-SPACE LINK</div>
+            <p className="wakeup-text">
+              Our remote multiplayer server runs on a smart sleep cycle to conserve energy. 
+              Waking up the server cores and establishing client sync. Please stand by...
+            </p>
+            <div className="wakeup-footer">
+              <div className="wakeup-signal-dot pulse-fast" />
+              <span className="wakeup-status-label">INITIALIZING NEURAL LINK...</span>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Subtle Screen Fade Transition Overlay */}
