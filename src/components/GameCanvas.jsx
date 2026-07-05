@@ -4380,7 +4380,6 @@ export default function GameCanvas({
           e.stopPropagation();
           onToggleMute();
         }}
-        title={muted ? 'Unmute Sound' : 'Mute Sound'}
       >
         {muted ? (
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 5L6 9H2v6h4l5 4V5zM23 9l-6 6M17 9l6 6"/></svg>

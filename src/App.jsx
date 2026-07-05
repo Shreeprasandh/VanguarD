@@ -453,7 +453,6 @@ export default function App() {
           <button 
             className="system-btn" 
             onClick={toggleMute} 
-            title={muted ? 'Unmute Sound' : 'Mute Sound'}
             style={{ opacity: 0.35 }}
           >
             {muted ? (
@@ -465,7 +464,6 @@ export default function App() {
           <button 
             className="system-btn" 
             onClick={() => { GameAudio.play('click'); setShowInfoPopup(true); }} 
-            title="Diagnostic Manual / Rules"
             style={{ opacity: 0.35 }}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
