@@ -1984,15 +1984,15 @@ export default function GameCanvas({
       } else if (state.meteorShowerTimer > 0) {
         tempo = 1.12;
         volume = 0.78;
-      } else if (state.streak >= 50) {
-        tempo = 1.10; // 10% speedup
-        volume = 0.80;
       } else if (state.streak >= 40) {
         tempo = 1.075; // 7.5% speedup
         volume = 0.77;
-      } else if (state.streak >= 20) {
+      } else if (state.streak >= 30) {
         tempo = 1.05; // 5% speedup
         volume = 0.74;
+      } else if (state.streak >= 20) {
+        tempo = 1.025; // 2.5% speedup
+        volume = 0.72;
       }
       
       GameAudio.setMusicTempoTarget(tempo);
