@@ -581,23 +581,24 @@ export default function GameCanvas({
 
     state.activeWordId = null;
     createExplosion(enemy.x, enemy.y, getColorHex(enemy.color), 22, true);
+    const panVal = getPan(enemy.x);
     if (enemy.type === 'meteor') {
-      GameAudio.play('meteor_explosion');
+      GameAudio.play('meteor_explosion', panVal);
     } else if (enemy.type === 'drone') {
-      GameAudio.play('explosion_drone');
+      GameAudio.play('explosion_drone', panVal);
     } else if (enemy.type === 'interceptor') {
-      GameAudio.play('explosion_interceptor');
+      GameAudio.play('explosion_interceptor', panVal);
     } else if (enemy.type === 'kamikaze') {
-      GameAudio.play('explosion_kamikaze');
+      GameAudio.play('explosion_kamikaze', panVal);
     } else if (enemy.type === 'cruiser') {
-      GameAudio.play('explosion_cruiser');
+      GameAudio.play('explosion_cruiser', panVal);
     } else if (enemy.type === 'shield_linker') {
-      GameAudio.play('explosion_linker');
-      GameAudio.play('enemy_shield_shatter');
+      GameAudio.play('explosion_linker', panVal);
+      GameAudio.play('enemy_shield_shatter', panVal);
     } else if (enemy.type === 'boss') {
-      GameAudio.play('boss_explosion');
+      GameAudio.play('boss_explosion', panVal);
     } else {
-      GameAudio.play('explosion');
+      GameAudio.play('explosion', panVal);
     }
     
     // Remove enemy from list

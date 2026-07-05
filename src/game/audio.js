@@ -1,5 +1,20 @@
 // Sound effects and background music controller
 
+function connectPanner(ctx, gainNode, pan = 0) {
+  if (pan !== 0) {
+    try {
+      const panner = ctx.createStereoPanner();
+      panner.pan.setValueAtTime(Math.max(-1.0, Math.min(1.0, pan)), ctx.currentTime);
+      gainNode.connect(panner);
+      panner.connect(ctx.destination);
+      return;
+    } catch (e) {
+      console.warn("StereoPanner connection failed, falling back to direct:", e);
+    }
+  }
+  gainNode.connect(ctx.destination);
+}
+
 class AudioManager {
   constructor() {
     this.sounds = {};
@@ -261,7 +276,7 @@ class AudioManager {
         gain.gain.setValueAtTime(0.2, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        connectPanner(ctx, gain, pan);
         osc.start();
         osc.stop(ctx.currentTime + 0.45);
       } catch (e) {}
@@ -282,7 +297,7 @@ class AudioManager {
         gain1.gain.setValueAtTime(0.15, ctx.currentTime);
         gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
         osc1.connect(gain1);
-        gain1.connect(ctx.destination);
+        connectPanner(ctx, gain1, pan);
         
         osc2.type = 'sawtooth';
         osc2.frequency.setValueAtTime(75, ctx.currentTime);
@@ -290,7 +305,7 @@ class AudioManager {
         gain2.gain.setValueAtTime(0.2, ctx.currentTime);
         gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.17);
         osc2.connect(gain2);
-        gain2.connect(ctx.destination);
+        connectPanner(ctx, gain2, pan);
         
         osc1.start();
         osc1.stop(ctx.currentTime + 0.25);
@@ -325,7 +340,7 @@ class AudioManager {
         
         osc.connect(filter);
         filter.connect(gain);
-        gain.connect(ctx.destination);
+        connectPanner(ctx, gain, pan);
         
         osc.start();
         osc.stop(t + 1.15);
@@ -362,7 +377,7 @@ class AudioManager {
         osc.connect(filter);
         noise.connect(filter);
         filter.connect(gain);
-        gain.connect(ctx.destination);
+        connectPanner(ctx, gain, pan);
         
         osc.start();
         osc.stop(t + 0.6);
@@ -399,7 +414,7 @@ class AudioManager {
         osc1.connect(filter);
         osc2.connect(filter);
         filter.connect(gain);
-        gain.connect(ctx.destination);
+        connectPanner(ctx, gain, pan);
         
         osc1.start();
         osc2.start();
@@ -425,7 +440,7 @@ class AudioManager {
         gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
         
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        connectPanner(ctx, gain, pan);
         
         osc.start();
         osc.stop(t + 0.2);
@@ -455,7 +470,7 @@ class AudioManager {
         
         osc.connect(gain);
         sweep.connect(gain);
-        gain.connect(ctx.destination);
+        connectPanner(ctx, gain, pan);
         
         osc.start();
         sweep.start();
@@ -492,7 +507,7 @@ class AudioManager {
         osc.connect(gain);
         noise.connect(filter);
         filter.connect(gain);
-        gain.connect(ctx.destination);
+        connectPanner(ctx, gain, pan);
         
         osc.start();
         noise.start();
@@ -528,8 +543,8 @@ class AudioManager {
         
         osc1.connect(gain1);
         osc2.connect(gain2);
-        gain1.connect(ctx.destination);
-        gain2.connect(ctx.destination);
+        connectPanner(ctx, gain1, pan);
+        connectPanner(ctx, gain2, pan);
         
         osc1.start();
         osc2.start(t + 0.15);
@@ -561,7 +576,7 @@ class AudioManager {
         
         osc.connect(gain);
         buzz.connect(gain);
-        gain.connect(ctx.destination);
+        connectPanner(ctx, gain, pan);
         
         osc.start();
         buzz.start();
@@ -598,7 +613,7 @@ class AudioManager {
         gain.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
         
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        connectPanner(ctx, gain, pan);
         
         modulator.start();
         osc.start();
@@ -630,7 +645,7 @@ class AudioManager {
         
         osc.connect(filter);
         filter.connect(gain);
-        gain.connect(ctx.destination);
+        connectPanner(ctx, gain, pan);
         
         osc.start();
         osc.stop(t + 0.5);
@@ -654,7 +669,7 @@ class AudioManager {
         gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
         
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        connectPanner(ctx, gain, pan);
         
         osc.start();
         osc.stop(t + 0.2);
@@ -687,7 +702,7 @@ class AudioManager {
           
           osc.connect(filter);
           filter.connect(gain);
-          gain.connect(ctx.destination);
+          connectPanner(ctx, gain, pan);
           
           osc.start(t + delay);
           osc.stop(t + delay + 0.5);
@@ -709,7 +724,7 @@ class AudioManager {
         gain.gain.setValueAtTime(0.15, t);
         gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        connectPanner(ctx, gain, pan);
         osc.start();
         osc.stop(t + 0.15);
       } catch(e) {}
@@ -729,7 +744,7 @@ class AudioManager {
         gain.gain.setValueAtTime(0.08, t);
         gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        connectPanner(ctx, gain, pan);
         osc.start();
         osc.stop(t + 0.2);
       } catch(e) {}
@@ -754,7 +769,7 @@ class AudioManager {
         gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
         
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        connectPanner(ctx, gain, pan);
         osc.start();
         osc.stop(t + 0.3);
       } catch(e) {}

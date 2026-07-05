@@ -16,6 +16,8 @@ export default function MenuBackground({ shipColor = 'blue' }) {
     };
     handleResize();
     window.addEventListener('resize', handleResize);
+    document.addEventListener('fullscreenchange', handleResize);
+    document.addEventListener('webkitfullscreenchange', handleResize);
 
     const trailParticles = [];
 
@@ -638,6 +640,8 @@ export default function MenuBackground({ shipColor = 'blue' }) {
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      document.removeEventListener('fullscreenchange', handleResize);
+      document.removeEventListener('webkitfullscreenchange', handleResize);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseleave', handleMouseLeave);
       cancelAnimationFrame(animId);
@@ -648,11 +652,11 @@ export default function MenuBackground({ shipColor = 'blue' }) {
     <canvas
       ref={canvasRef}
       style={{
-        position: 'absolute',
+        position: 'fixed',
         top: 0,
         left: 0,
-        width: '100%',
-        height: '100%',
+        width: '100vw',
+        height: '100vh',
         zIndex: -1,
         pointerEvents: 'none'
       }}
