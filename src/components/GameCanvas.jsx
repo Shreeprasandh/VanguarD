@@ -138,6 +138,15 @@ export default function GameCanvas({
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
+    // Global window keydown listener to ensure keyboard input is captured reliably
+    const handleGlobalKeyDown = (e) => {
+      if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
+        return;
+      }
+      keyHandlerRef.current(e);
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+
     // Focus canvas
     canvas.focus();
 
@@ -157,6 +166,7 @@ export default function GameCanvas({
 
     return () => {
       window.removeEventListener('resize', resizeCanvas);
+      window.removeEventListener('keydown', handleGlobalKeyDown);
       cancelAnimationFrame(animationFrameId);
       GameAudio.stopMusic();
     };
@@ -732,13 +742,13 @@ export default function GameCanvas({
     if (state.isLocalGameOver || state.isPaused) return;
 
     const key = e.key.toLowerCase();
-    if (key === 'x' || key === 'z' || key === 's') {
-      const slotIdx = key === 'x' ? 0 : key === 'z' ? 1 : 2;
+    if (key === '1' || key === '2' || key === '3') {
+      const slotIdx = key === '1' ? 0 : key === '2' ? 1 : 2;
       triggerSkill(slotIdx);
       return;
     }
 
-    if (key === 'a') {
+    if (key === '5' || key === '7') {
       if (state.bossShieldsCount > 0 && state.bossShieldTime <= 0) {
         state.bossShieldsCount -= 1;
         setBossShields(state.bossShieldsCount);
@@ -2478,6 +2488,11 @@ export default function GameCanvas({
     }
   };
 
+  const keyHandlerRef = useRef(handleKeyDown);
+  useEffect(() => {
+    keyHandlerRef.current = handleKeyDown;
+  });
+
   const [paused, setPaused] = useState(false);
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
   const [charge, setCharge] = useState(0);
@@ -2515,7 +2530,6 @@ export default function GameCanvas({
         id="gameCanvas"
         ref={canvasRef}
         tabIndex="0"
-        onKeyDown={handleKeyDown}
       />
 
       {/* Tactical Skill HUD Overlay (Left Column - Under Multiplier) */}
@@ -2577,7 +2591,6 @@ export default function GameCanvas({
             </span>
           </div>
 
-          {/* Stored Boss Shield Indicators (3 slots) */}
           <div 
             style={{
               display: 'flex',
@@ -2587,38 +2600,35 @@ export default function GameCanvas({
               opacity: 0.75, // always glowing at 75%
               transition: 'opacity 0.3s'
             }}
-            title="Defensive Boss Shield cores [A]"
+            title="Defensive Boss Shield cores [5/7]"
           >
             <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
               {[0, 1, 2].map(sIdx => {
                 const isClaimed = bossShields > sIdx;
                 return (
                   <div 
-                    key={sIdx}
-                    style={{
-                      width: '18px',
-                      height: '18px',
-                      borderRadius: '50%',
-                      border: isClaimed ? '1px solid #38bdf8' : '1px dashed rgba(56, 189, 248, 0.15)',
-                      background: isClaimed ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
-                      boxShadow: isClaimed ? '0 0 6px rgba(56, 189, 248, 0.4)' : 'none',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      opacity: isClaimed ? 0.75 : 0.15,
-                      transition: 'all 0.3s ease'
-                    }}
-                  >
-                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.5">
-                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                    </svg>
-                  </div>
-                );
-              })}
-            </div>
-            <span style={{ fontSize: '7px', fontFamily: 'var(--font-display)', color: '#38bdf8', opacity: 0.6 }}>
-              [A]
-            </span>
+                     key={sIdx}
+                     style={{
+                       width: '18px',
+                       height: '18px',
+                       borderRadius: '50%',
+                       border: isClaimed ? '1px solid #38bdf8' : '1px dashed rgba(56, 189, 248, 0.15)',
+                       background: isClaimed ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
+                       boxShadow: isClaimed ? '0 0 6px rgba(56, 189, 248, 0.4)' : 'none',
+                       display: 'flex',
+                       alignItems: 'center',
+                       justifyContent: 'center',
+                       opacity: isClaimed ? 0.75 : 0.15,
+                       transition: 'all 0.3s ease'
+                     }}
+                   >
+                     <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.5">
+                       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                     </svg>
+                   </div>
+                 );
+               })}
+             </div>
           </div>
 
           {/* Active Boss Shield timer display next to it */}

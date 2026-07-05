@@ -132,11 +132,11 @@ export default function InfoPopup({ onClose }) {
             <p className="info-text">
               Configure and carry 3 modular skills:
               <br />
-              • Slot 1 Trigger Key: <span className="hotkey-badge">X</span>
+              • Slot 1 Trigger Key: <span className="hotkey-badge">1</span>
               <br />
-              • Slot 2 Trigger Key: <span className="hotkey-badge">Z</span>
+              • Slot 2 Trigger Key: <span className="hotkey-badge">2</span>
               <br />
-              • Slot 3 Trigger Key: <span className="hotkey-badge">S</span>
+              • Slot 3 Trigger Key: <span className="hotkey-badge">3</span>
               <br />
               Each skill consumes a portion of the tactical charge meter, which accumulates as you type words without mistakes.
             </p>
@@ -145,7 +145,7 @@ export default function InfoPopup({ onClose }) {
           <div className="info-section">
             <div className="info-section-title">Defensive Boss Shield</div>
             <p className="info-text">
-              Destroying command dreadnoughts rewards you with stored shield cores. Press <span className="hotkey-badge">A</span> to activate a sky-blue energy barrier that absorbs up to 3 typographical mistakes or bullet impacts for 8 seconds.
+              Destroying command dreadnoughts rewards you with stored shield cores. Press <span className="hotkey-badge">5</span> or <span className="hotkey-badge">7</span> to activate a sky-blue energy barrier that absorbs up to 3 typographical mistakes or bullet impacts for 8 seconds.
             </p>
           </div>
 
