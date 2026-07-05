@@ -263,7 +263,7 @@ export default function GameCanvas({
               createExplosion(data.x, data.y, getColorHex(mate.color), 8);
 
               // Play strike audio
-              GameAudio.play('hit', (data.x / window.innerWidth) * 2 - 1);
+              GameAudio.play('hit', getPan(data.x));
 
               if (data.wordFinished) {
                 if (targetEnemy.wordQueue && targetEnemy.wordQueue.length > 0) {
@@ -271,17 +271,17 @@ export default function GameCanvas({
                   targetEnemy.word = nextWord;
                   targetEnemy.targetIndex = 0;
                   createExplosion(data.x, data.y, getColorHex(mate.color), 10);
-                  GameAudio.play('explosionSmall', (data.x / window.innerWidth) * 2 - 1);
+                  GameAudio.play('explosionSmall', getPan(data.x));
                 } else {
                   // Enemy dies
                   state.enemies = state.enemies.filter(e => e.id !== data.wordId);
                   handleEnemyCompletion(data.wordId);
                   createExplosion(data.x, data.y, getColorHex(mate.color), 25, true);
                   if (data.wordId && data.wordId.startsWith('meteor')) {
-                    GameAudio.play('meteor_explosion', (data.x / window.innerWidth) * 2 - 1);
+                    GameAudio.play('meteor_explosion', getPan(data.x));
                   } else {
                     const enemyType = targetEnemy ? targetEnemy.type : 'drone';
-                    const panVal = (data.x / window.innerWidth) * 2 - 1;
+                    const panVal = getPan(data.x);
                     if (enemyType === 'drone') GameAudio.play('explosion_drone', panVal);
                     else if (enemyType === 'interceptor') GameAudio.play('explosion_interceptor', panVal);
                     else if (enemyType === 'kamikaze') GameAudio.play('explosion_kamikaze', panVal);
@@ -307,7 +307,7 @@ export default function GameCanvas({
             if (bullet) {
               createExplosion(bullet.x, bullet.y, '#fff', 12);
               state.bullets = state.bullets.filter(b => b.id !== data.bulletId);
-              GameAudio.play('hit', (bullet.x / window.innerWidth) * 2 - 1);
+              GameAudio.play('hit', getPan(bullet.x));
             }
             break;
           }
@@ -360,7 +360,7 @@ export default function GameCanvas({
                 const skill = SKILLS_DB.find(s => s.id === data.skillId);
                 const resolvedColor = skill ? skill.color : '#ffffff';
                 createExplosion(mx, my, resolvedColor, 20);
-                GameAudio.play('laserPlayer', (mx / window.innerWidth) * 2 - 1);
+                GameAudio.play('laserPlayer', getPan(mx));
               }
             }
             break;
@@ -546,7 +546,7 @@ export default function GameCanvas({
     setCooldowns([...state.cooldowns]);
     const canvasVal = canvasRef.current;
     const pxVal = canvasVal ? getShipX(localPosition, canvasVal.width) : window.innerWidth / 2;
-    GameAudio.play('laserPlayer', (pxVal / (canvasVal ? canvasVal.width : window.innerWidth)) * 2 - 1);
+    GameAudio.play('laserPlayer', getPan(pxVal));
 
     // Trigger specific skill powers
     switch (skillId) {
@@ -770,6 +770,15 @@ export default function GameCanvas({
     return screenWidth / 2; // host/center
   };
 
+  const getPan = (x) => {
+    const screenWidth = canvas ? canvas.width : window.innerWidth;
+    const localPosition = isMultiplayer 
+      ? players.find(p => p.socketId === socket?.id)?.position || 'center' 
+      : 'center';
+    const shipX = getShipX(localPosition, screenWidth);
+    return Math.max(-1.0, Math.min(1.0, (x - shipX) / (screenWidth / 2)));
+  };
+
   const createExplosion = (x, y, color, particleCount = 15, isBig = false) => {
     const state = stateRef.current;
     const count = isBig ? particleCount * 2 : particleCount;
@@ -840,7 +849,7 @@ export default function GameCanvas({
       // Cancel it locally
       state.bullets.splice(bulletToHitIndex, 1);
       createExplosion(bullet.x, bullet.y, '#ffffff', 10);
-      GameAudio.play('hit', (bullet.x / window.innerWidth) * 2 - 1);
+      GameAudio.play('hit', getPan(bullet.x));
       
       // Update score locally
       state.score += 10;
@@ -869,7 +878,7 @@ export default function GameCanvas({
       const enemy = state.enemies.find(e => e.id === state.activeWordId);
       if (enemy) {
         if (enemy.isInvulnerable) {
-          GameAudio.play('shield_hit', (enemy.x / window.innerWidth) * 2 - 1);
+          GameAudio.play('shield_hit', getPan(enemy.x));
           return; // Linked target is invulnerable!
         }
         const nextChar = enemy.word[enemy.targetIndex].toLowerCase();
@@ -925,7 +934,7 @@ export default function GameCanvas({
         return matchesColor && startsWithChar && e.isInvulnerable;
       });
       if (invulnerableMatch) {
-        GameAudio.play('shield_hit', (invulnerableMatch.x / window.innerWidth) * 2 - 1);
+        GameAudio.play('shield_hit', getPan(invulnerableMatch.x));
       }
 
       // General typo outside active target
@@ -946,7 +955,7 @@ export default function GameCanvas({
     eligibleEnemies.sort((a, b) => b.y - a.y);
     const target = eligibleEnemies[0];
     state.activeWordId = target.id;
-    GameAudio.play('target', (target.x / window.innerWidth) * 2 - 1);
+    GameAudio.play('target', getPan(target.x));
     
     // Hit first character
     hitTarget(target);
@@ -1017,7 +1026,7 @@ export default function GameCanvas({
 
     // Spark particles at impact point
     createExplosion(letterX, letterY, getColorHex(shipColor), 8);
-    GameAudio.play('plasma', (letterX / canvas.width) * 2 - 1);
+    GameAudio.play('plasma', getPan(letterX));
 
     // Check if word completed
     const wordFinished = enemy.targetIndex >= enemy.word.length;
@@ -1033,11 +1042,11 @@ export default function GameCanvas({
         enemy.targetIndex = 0;
         state.activeWordId = null;
         createExplosion(enemy.x, enemy.y, getColorHex(enemy.color), 10);
-        GameAudio.play('explosionSmall', (enemy.x / canvas.width) * 2 - 1);
+        GameAudio.play('explosionSmall', getPan(enemy.x));
       } else {
         state.activeWordId = null;
         createExplosion(enemy.x, enemy.y, getColorHex(enemy.color), 22, true);
-        GameAudio.play('explosion', (enemy.x / canvas.width) * 2 - 1);
+        GameAudio.play('explosion', getPan(enemy.x));
         
         // Build charge slowly if no typos were made
         if (!enemy.typos || enemy.typos === 0) {
@@ -1317,7 +1326,7 @@ export default function GameCanvas({
           
           createExplosion(oldX, boss.y, '#38bdf8', 25, true);
           createExplosion(boss.x, boss.y, '#38bdf8', 25, true);
-          GameAudio.play('laser', (boss.x / canvas.width) * 2 - 1); // warp teleport sound
+          GameAudio.play('laser', getPan(boss.x)); // warp teleport sound
           
           // Update words target positions
           boss.words.forEach(w => {
@@ -1336,7 +1345,7 @@ export default function GameCanvas({
           boss.targetFireLane = lanes[Math.floor(Math.random() * lanes.length)];
           boss.fireWarningTime = 90; // 1.5 seconds warning
           const laneXVal = getShipX(boss.targetFireLane, canvas.width);
-          GameAudio.play('warning', (laneXVal / canvas.width) * 2 - 1);
+          GameAudio.play('warning', getPan(laneXVal));
         }
 
         if (boss.targetFireLane) {
@@ -1345,7 +1354,7 @@ export default function GameCanvas({
             if (boss.fireWarningTime <= 0) {
               boss.fireActiveTime = 180; // 3 seconds active
               const laneXVal = getShipX(boss.targetFireLane, canvas.width);
-              GameAudio.play('explosionLarge', (laneXVal / canvas.width) * 2 - 1); // burn roaring blast
+              GameAudio.play('explosionLarge', getPan(laneXVal)); // burn roaring blast
             }
           } else if (boss.fireActiveTime > 0) {
             boss.fireActiveTime -= 1;
