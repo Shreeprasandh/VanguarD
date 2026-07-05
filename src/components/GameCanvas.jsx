@@ -1955,6 +1955,49 @@ export default function GameCanvas({
         }));
       }
     }
+    // Update procedural music theme and tempo targets based on combat intensity
+    if (state.waveState === 'boss_fight' && state.bossObj) {
+      const bName = state.bossObj.name;
+      if (bName === 'VOID EMPEROR') {
+        GameAudio.setMusicTheme('boss_void_emperor');
+      } else if (bName === 'SINGULARITY VOID') {
+        GameAudio.setMusicTheme('boss_singularity');
+      } else {
+        GameAudio.setMusicTheme('boss_dreadnought');
+      }
+      GameAudio.setMusicTempoTarget(1.22);
+      GameAudio.setMusicVolumeTarget(0.85); // slight volume swell for boss intensity
+    } else if (state.enemies.some(e => e.type === 'anomaly')) {
+      GameAudio.setMusicTheme('miniboss');
+      GameAudio.setMusicTempoTarget(1.15);
+      GameAudio.setMusicVolumeTarget(0.8);
+    } else {
+      GameAudio.setMusicTheme('ingame');
+      
+      // Calculate typing intensity based on streak & warnings
+      let tempo = 1.0;
+      let volume = 0.7;
+      
+      if (state.waveState === 'boss_warning') {
+        tempo = 1.15;
+        volume = 0.85;
+      } else if (state.meteorShowerTimer > 0) {
+        tempo = 1.12;
+        volume = 0.78;
+      } else if (state.streak >= 50) {
+        tempo = 1.20; // 20% speedup
+        volume = 0.82;
+      } else if (state.streak >= 25) {
+        tempo = 1.10; // 10% speedup
+        volume = 0.76;
+      } else if (state.streak >= 10) {
+        tempo = 1.05; // 5% speedup
+        volume = 0.72;
+      }
+      
+      GameAudio.setMusicTempoTarget(tempo);
+      GameAudio.setMusicVolumeTarget(volume);
+    }
   };
 
   const spawnAnomalyMiniBoss = () => {

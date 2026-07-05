@@ -23,6 +23,10 @@ class AudioManager {
     this.initialized = false;
     this.musicPlaying = false;
     this.currentTrack = null;
+    this.activeMusicTheme = 'ingame';
+    this.tempoTarget = 1.0;
+    this.tempoCurrent = 1.0;
+    this.volumeTarget = 0.7;
     
     // File paths relative to public directory
     this.soundPaths = {
@@ -1012,6 +1016,10 @@ class AudioManager {
       this.ingameAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
       const ctx = this.ingameAudioCtx;
       
+      this.tempoCurrent = 1.0;
+      this.tempoTarget = 1.0;
+      this.volumeTarget = 0.7;
+
       // Master Gain for in-game theme to allow smooth transitions
       this.ingameMasterGain = ctx.createGain();
       this.ingameMasterGain.gain.setValueAtTime(0.0001, ctx.currentTime);
@@ -1062,67 +1070,173 @@ class AudioManager {
 
       const playChords = (t) => {
         if (!this.ingameAudioCtx || ctx.state === 'suspended') return;
-        const activeChordIdx = chordIdx;
-        const chord = ingameChords[chordIdx];
-        chordIdx = (chordIdx + 1) % ingameChords.length;
+        
+        let chordDur = 4.0 / this.tempoCurrent;
+        let activeChords = ingameChords;
+        let activeChimesA = ingameChimesSetA;
+        let activeChimesB = ingameChimesSetB;
+        let padOscType = 'sine';
+        let chimeOscType = 'sine';
+        let octaveMultiplier = 1.0;
+        
+        if (this.activeMusicTheme === 'boss_void_emperor') {
+          activeChords = [
+            [110.00, 138.59, 164.81],
+            [116.54, 146.83, 174.61],
+            [110.00, 138.59, 164.81],
+            [98.00, 123.47, 146.83]
+          ];
+          padOscType = 'sawtooth';
+          chimeOscType = 'triangle';
+          octaveMultiplier = 1.5;
+        } else if (this.activeMusicTheme === 'boss_singularity') {
+          activeChords = [
+            [220.00, 293.66, 349.23],
+            [196.00, 261.63, 311.13],
+            [220.00, 293.66, 349.23],
+            [246.94, 329.63, 392.00]
+          ];
+          padOscType = 'sine';
+          chimeOscType = 'sine';
+          octaveMultiplier = 1.0;
+        } else if (this.activeMusicTheme === 'boss_dreadnought') {
+          activeChords = [
+            [110.00, 130.81, 155.56],
+            [98.00, 116.54, 138.59],
+            [110.00, 130.81, 164.81],
+            [82.41, 103.83, 123.47]
+          ];
+          padOscType = 'triangle';
+          chimeOscType = 'sine';
+          octaveMultiplier = 1.25;
+        } else if (this.activeMusicTheme === 'miniboss') {
+          activeChords = [
+            [146.83, 174.61, 220.00],
+            [174.61, 220.00, 261.63],
+            [196.00, 246.94, 293.66],
+            [130.81, 164.81, 196.00]
+          ];
+          padOscType = 'sine';
+          chimeOscType = 'triangle';
+        }
+
+        const activeChordIdx = chordIdx % activeChords.length;
+        const chord = activeChords[activeChordIdx];
+        chordIdx = (chordIdx + 1) % activeChords.length;
         
         // Play the 3 chord voices
         chord.forEach((freq, idx) => {
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
-          gain.gain.value = 0.0001; // Initialize to 0.0001 to prevent clicking
+          gain.gain.value = 0.0001;
           
-          osc.type = 'sine';
+          osc.type = padOscType;
           osc.frequency.setValueAtTime(freq, t);
           
           gain.gain.setValueAtTime(0.0001, t);
-          gain.gain.exponentialRampToValueAtTime(0.006, t + 0.8); // slow fade-in pad (half volume)
-          gain.gain.exponentialRampToValueAtTime(0.006, t + 3.2); // sustain until 3.2s
-          gain.gain.exponentialRampToValueAtTime(0.0001, t + 3.9); // fade out fully before next chord
+          const maxVol = padOscType === 'sawtooth' ? 0.0022 : (padOscType === 'triangle' ? 0.004 : 0.006);
+          gain.gain.exponentialRampToValueAtTime(maxVol, t + 0.8 / this.tempoCurrent);
+          gain.gain.exponentialRampToValueAtTime(maxVol, t + 3.2 / this.tempoCurrent);
+          gain.gain.exponentialRampToValueAtTime(0.0001, t + 3.9 / this.tempoCurrent);
           
           osc.connect(gain);
           gain.connect(this.ingameMasterGain);
           
           osc.start(t);
-          osc.stop(t + 4.0);
+          osc.stop(t + chordDur);
         });
 
-        // Play the 3 soothing chimes at sample-accurate beat delays with alternative Set A/B variety
-        const chimePitches = Math.random() < 0.5 ? ingameChimesSetA[activeChordIdx] : ingameChimesSetB[activeChordIdx];
+        // Add low sub bass drone for boss fights
+        if (this.activeMusicTheme.startsWith('boss_')) {
+          const bassOsc = ctx.createOscillator();
+          const bassGain = ctx.createGain();
+          bassOsc.type = this.activeMusicTheme === 'boss_void_emperor' ? 'sawtooth' : 'sine';
+          const baseFreq = chord[0] / 2;
+          bassOsc.frequency.setValueAtTime(baseFreq, t);
+          
+          bassGain.gain.setValueAtTime(0.0001, t);
+          const bassVol = this.activeMusicTheme === 'boss_void_emperor' ? 0.012 : 0.022;
+          bassGain.gain.exponentialRampToValueAtTime(bassVol, t + 0.1 / this.tempoCurrent);
+          bassGain.gain.exponentialRampToValueAtTime(0.0001, t + chordDur - 0.2 / this.tempoCurrent);
+          
+          const lpFilter = ctx.createBiquadFilter();
+          lpFilter.type = 'lowpass';
+          lpFilter.frequency.setValueAtTime(130, t); // clean sub below 130Hz
+          
+          bassOsc.connect(lpFilter);
+          lpFilter.connect(bassGain);
+          bassGain.connect(this.ingameMasterGain);
+          
+          bassOsc.start(t);
+          bassOsc.stop(t + chordDur);
+        } else if (this.activeMusicTheme === 'miniboss') {
+          // Pulsing syncopated bassline
+          const pulses = 4;
+          const pulseInterval = chordDur / pulses;
+          for (let p = 0; p < pulses; p++) {
+            const pulseTime = t + p * pulseInterval;
+            const bassOsc = ctx.createOscillator();
+            const bassGain = ctx.createGain();
+            bassOsc.type = 'triangle';
+            bassOsc.frequency.setValueAtTime(chord[0] / 2, pulseTime);
+            
+            bassGain.gain.setValueAtTime(0.0001, pulseTime);
+            bassGain.gain.exponentialRampToValueAtTime(0.015, pulseTime + 0.05);
+            bassGain.gain.exponentialRampToValueAtTime(0.0001, pulseTime + pulseInterval - 0.05);
+            
+            bassOsc.connect(bassGain);
+            bassGain.connect(this.ingameMasterGain);
+            
+            bassOsc.start(pulseTime);
+            bassOsc.stop(pulseTime + pulseInterval);
+          }
+        }
+
+        // Play chimes
+        const chimePitches = Math.random() < 0.5 ? activeChimesA[activeChordIdx] || activeChimesA[0] : activeChimesB[activeChordIdx] || activeChimesB[0];
         const chimeDelays = [0.6, 1.8, 3.0];
         
-        chimePitches.forEach((chimeFreq, idx) => {
-          const chimeTime = t + chimeDelays[idx];
-          const chimeDur = 0.8;
+        if (chimePitches) {
+          chimePitches.forEach((chimeFreq, idx) => {
+            const chimeTime = t + chimeDelays[idx] / this.tempoCurrent;
+            const chimeDur = 0.8 / this.tempoCurrent;
 
-          const chimeOsc = ctx.createOscillator();
-          const chimeGain = ctx.createGain();
-          chimeGain.gain.value = 0.0001;
+            const chimeOsc = ctx.createOscillator();
+            const chimeGain = ctx.createGain();
+            chimeGain.gain.value = 0.0001;
 
-          chimeOsc.type = 'sine';
-          chimeOsc.frequency.setValueAtTime(chimeFreq, t); // Set immediately to prevent start-clicks
+            chimeOsc.type = chimeOscType;
+            chimeOsc.frequency.setValueAtTime(chimeFreq * octaveMultiplier, t);
 
-          chimeGain.gain.setValueAtTime(0.0001, chimeTime);
-          chimeGain.gain.exponentialRampToValueAtTime(0.0022, chimeTime + 0.025); // clickless 25ms attack (half volume)
-          chimeGain.gain.exponentialRampToValueAtTime(0.0022, chimeTime + chimeDur);
-          chimeGain.gain.exponentialRampToValueAtTime(0.0001, chimeTime + chimeDur + 0.4); // soft 400ms release
+            chimeGain.gain.setValueAtTime(0.0001, chimeTime);
+            chimeGain.gain.exponentialRampToValueAtTime(0.0022, chimeTime + 0.025 / this.tempoCurrent);
+            chimeGain.gain.exponentialRampToValueAtTime(0.0022, chimeTime + chimeDur);
+            chimeGain.gain.exponentialRampToValueAtTime(0.0001, chimeTime + chimeDur + 0.4 / this.tempoCurrent);
 
-          chimeOsc.connect(chimeGain);
-          chimeGain.connect(this.ingameMasterGain);
-          chimeGain.connect(delayNode);
+            chimeOsc.connect(chimeGain);
+            chimeGain.connect(this.ingameMasterGain);
+            chimeGain.connect(delayNode);
 
-          chimeOsc.start(chimeTime);
-          chimeOsc.stop(chimeTime + chimeDur + 0.5);
-        });
+            chimeOsc.start(chimeTime);
+            chimeOsc.stop(chimeTime + chimeDur + 0.5);
+          });
+        }
       };
       
       this.nextIngameChordTime = ctx.currentTime + 0.05;
       const scheduler = () => {
         if (!this.ingameAudioCtx || ctx.state === 'suspended') return;
+        
+        // Ease tempo and volume targets smoothly to prevent clicks/pops
+        this.tempoCurrent += (this.tempoTarget - this.tempoCurrent) * 0.05;
+        const currentGain = this.ingameMasterGain.gain.value;
+        const targetGain = this.volumeTarget * (this.activeMusicTheme.startsWith('boss_') ? 1.25 : 1.0);
+        this.ingameMasterGain.gain.setValueAtTime(currentGain + (targetGain - currentGain) * 0.05, ctx.currentTime);
+
         const scheduleAheadTime = 0.3; // schedule 300ms in advance to bypass GC pauses
         while (this.nextIngameChordTime < ctx.currentTime + scheduleAheadTime) {
           playChords(this.nextIngameChordTime);
-          this.nextIngameChordTime += 4.0; // increment exactly by 4 seconds to prevent drift
+          this.nextIngameChordTime += 4.0 / this.tempoCurrent;
         }
       };
 
@@ -1182,10 +1296,28 @@ class AudioManager {
     this.ingameAudioCtx = null;
     this.ingameMasterGain = null;
     this.startIngameSynthFn = null;
+    
+    this.activeMusicTheme = 'ingame';
+    this.tempoTarget = 1.0;
+    this.tempoCurrent = 1.0;
+    this.volumeTarget = 0.7;
+
     if (this.currentTrack === 'ingame_synth') {
       this.currentTrack = null;
       this.musicPlaying = false;
     }
+  }
+
+  setMusicTheme(theme) {
+    this.activeMusicTheme = theme;
+  }
+
+  setMusicTempoTarget(tempo) {
+    this.tempoTarget = tempo;
+  }
+
+  setMusicVolumeTarget(volume) {
+    this.volumeTarget = volume;
   }
 
   playMusic(trackName = 'endure') {
