@@ -49,6 +49,7 @@ export default function App() {
   const [socketConnected, setSocketConnected] = useState(false);
   const [showServerWakeup, setShowServerWakeup] = useState(false);
   const [serverWakeupCountdown, setServerWakeupCountdown] = useState(45);
+  const [localSocketId, setLocalSocketId] = useState('');
 
   // Gameplay scoring caches
   const [gameStats, setGameStats] = useState({ score: 0, wave: 1 });
@@ -139,10 +140,11 @@ export default function App() {
         setSocketConnected(true);
         setShowServerWakeup(false);
         if (wakeupTimer) clearTimeout(wakeupTimer);
-        // Register current username on connect
+        // Register current username and color on connect
         socket.send(JSON.stringify({
           type: 'REGISTER',
-          username: username
+          username: username,
+          color: shipColor
         }));
       };
 
@@ -150,6 +152,10 @@ export default function App() {
         try {
           const data = JSON.parse(event.data);
           switch (data.type) {
+            case 'REGISTERED':
+              setLocalSocketId(data.socketId);
+              break;
+
             case 'LEADERBOARD_UPDATE':
               setLeaderboard(data.leaderboard);
               break;
@@ -177,13 +183,20 @@ export default function App() {
               }
               break;
 
-            case 'GAME_STARTED':
+            case 'GAME_STARTED': {
               setPlayers(data.players);
               if (data.maxPlayers) {
                 setMaxPlayers(data.maxPlayers);
               }
+              // Sync local ship color with the color assigned in the lobby
+              const localPlayer = data.players.find(p => p.socketId === data.socketId || p.socketId === localSocketId);
+              if (localPlayer && localPlayer.color) {
+                setShipColor(localPlayer.color);
+                localStorage.setItem('cybertype_color', localPlayer.color);
+              }
               changeScreenWithFade('playing');
               break;
+            }
 
             case 'ROOM_ERROR':
               alert(data.message);
@@ -270,6 +283,23 @@ export default function App() {
         username: newUsername,
         color: newColor
       }));
+
+      if (roomCode) {
+        socketRef.current.send(JSON.stringify({
+          type: 'UPDATE_PROFILE',
+          username: newUsername,
+          color: newColor,
+          skills: newSkills
+        }));
+      }
+    }
+  };
+
+  const handleToggleReady = () => {
+    if (socketRef.current && socketConnected) {
+      socketRef.current.send(JSON.stringify({
+        type: 'TOGGLE_READY'
+      }));
     }
   };
 
@@ -320,7 +350,10 @@ export default function App() {
     if (socketRef.current && socketConnected) {
       socketRef.current.send(JSON.stringify({ 
         type: 'CREATE_ROOM',
-        maxPlayers
+        maxPlayers,
+        username,
+        color: shipColor,
+        skills: equippedSkills
       }));
     }
   };
@@ -329,7 +362,10 @@ export default function App() {
     if (socketRef.current && socketConnected) {
       socketRef.current.send(JSON.stringify({
         type: 'JOIN_ROOM',
-        roomCode: code
+        roomCode: code,
+        username,
+        color: shipColor,
+        skills: equippedSkills
       }));
     }
   };
@@ -429,17 +465,21 @@ export default function App() {
             roomCode={roomCode}
             players={players}
             maxPlayers={maxPlayers}
-            localPlayerId={socketRef.current ? socketRef.current.id : ''}
+            localPlayerId={localSocketId}
+            localUsername={username}
+            localShipColor={shipColor}
             onSelectColor={handleSelectColor}
             onStartGame={handleStartGame}
             onLeaveRoom={handleLeaveRoom}
+            onOpenProfileEdit={() => setShowEditProfile(true)}
+            onToggleReady={handleToggleReady}
           />
         );
 
       case 'playing':
         // Attach socket id for ship identification
         if (socketRef.current) {
-          socketRef.current.id = players.find(p => p.username === username)?.socketId || 'local';
+          socketRef.current.id = localSocketId || 'local';
         }
 
         return (

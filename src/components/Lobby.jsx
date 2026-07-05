@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { GameAudio } from '../game/audio';
 
-export default function Lobby({ roomCode, players, maxPlayers = 3, localPlayerId, onSelectColor, onStartGame, onLeaveRoom }) {
+export default function Lobby({ roomCode, players, maxPlayers = 3, localPlayerId, localUsername, localShipColor, onSelectColor, onStartGame, onLeaveRoom, onOpenProfileEdit, onToggleReady }) {
   const [errorMessage, setErrorMessage] = useState(null);
 
-  const localPlayerInRoom = players.find(p => p.socketId === localPlayerId);
+  const localPlayerInRoom = players.find(p => p.socketId === localPlayerId) ||
+                            players.find(p => p.username === localUsername);
   const isHost = localPlayerInRoom?.isHost || false;
-  const localPlayerColor = localPlayerInRoom?.color || null;
+  const localPlayerColor = localPlayerInRoom?.color || localShipColor || null;
 
   // Position slots
   const slots = maxPlayers === 2
@@ -51,13 +52,38 @@ export default function Lobby({ roomCode, players, maxPlayers = 3, localPlayerId
     onLeaveRoom();
   };
 
+  const handleToggleReadyClick = () => {
+    GameAudio.play('click');
+    
+    if (!localPlayerColor) {
+      setErrorMessage("System diagnostic failure: You must select a defensive color configuration (Red, Blue, or Green) to initialize weapon sync before readying up.");
+      return;
+    }
+    
+    const isCurrentlyReady = localPlayerInRoom?.isReady || false;
+    if (!isCurrentlyReady) {
+      // Check if another player has the same color
+      const conflictingPlayer = players.find(p => p.socketId !== localPlayerInRoom?.socketId && p.color === localPlayerColor);
+      if (conflictingPlayer) {
+        setErrorMessage(`Spacecraft signature conflict: Pilot [${conflictingPlayer.username}] has already registered the ${localPlayerColor.toUpperCase()} weapon grid. You must configure your spacecraft to a different color to ready up.`);
+        return;
+      }
+    }
+    
+    if (onToggleReady) {
+      onToggleReady();
+    }
+  };
+
   const isLobbyFull = players.length === maxPlayers;
+  const guests = players.filter(p => !p.isHost);
+  const allOthersReady = guests.length > 0 && guests.every(p => p.isReady === true);
   const allPickedColors = players.every(p => p.color);
   const colorsList = players.map(p => p.color).filter(Boolean);
   const uniqueColors = new Set(colorsList);
   const noColorConflicts = uniqueColors.size === colorsList.length && colorsList.length === players.length;
 
-  const canStart = isHost && isLobbyFull && allPickedColors && noColorConflicts;
+  const canStart = isHost && isLobbyFull && allOthersReady && allPickedColors && noColorConflicts;
 
   const getShipSvg = (color) => {
     let strokeColor = 'rgba(255, 255, 255, 0.15)';
@@ -68,15 +94,18 @@ export default function Lobby({ roomCode, players, maxPlayers = 3, localPlayerId
     return (
       <svg 
         className="lobby-ship-floating" 
-        width="48" 
-        height="48" 
+        width="64" 
+        height="64" 
         viewBox="0 0 40 40" 
         style={{ 
-          filter: color ? `drop-shadow(0 0 6px ${strokeColor})` : 'none',
-          animation: 'lobbyFloat 3.5s ease-in-out infinite',
-          margin: '1.5rem 0'
+          filter: color ? `drop-shadow(0 0 8px ${strokeColor})` : 'none',
+          animation: 'lobbyFloat 4s ease-in-out infinite',
+          margin: '1.8rem 0 0.8rem 0'
         }}
       >
+        {/* Hologram Scanner Ring */}
+        <ellipse cx="20" cy="30" rx="14" ry="4" fill="none" stroke={strokeColor} strokeWidth="1" opacity="0.3" strokeDasharray="3 3" />
+        {/* Ship Hull */}
         <path
           d="M 20 6 L 32 28 L 20 22 L 8 28 Z"
           fill="none"
@@ -84,7 +113,10 @@ export default function Lobby({ roomCode, players, maxPlayers = 3, localPlayerId
           strokeWidth="2.5"
           strokeLinejoin="round"
         />
-        {color && <circle cx="20" cy="18" r="2.5" fill={strokeColor} />}
+        {/* Core light */}
+        <circle cx="20" cy="18" r="2.5" fill={strokeColor} />
+        {/* Engine Fire */}
+        <path className="lobby-ship-engine" d="M 16 23 L 20 34 L 24 23 Z" fill={strokeColor} opacity="0.4" />
       </svg>
     );
   };
@@ -180,15 +212,24 @@ export default function Lobby({ roomCode, players, maxPlayers = 3, localPlayerId
           background: transparent;
         }
 
+        .lobby-ship-engine {
+          animation: enginePulse 0.15s ease-in-out infinite alternate;
+        }
+
         @keyframes lobbyFloat {
           0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-6px); }
+          50% { transform: translateY(-8px); }
+        }
+
+        @keyframes enginePulse {
+          0% { transform: scaleY(0.85) translateY(-1px); opacity: 0.35; }
+          100% { transform: scaleY(1.2) translateY(1px); opacity: 0.65; }
         }
 
         /* Color choices */
         .console-pick-circle {
-          width: 32px;
-          height: 32px;
+          width: 22px;
+          height: 22px;
           border-radius: 50%;
           border: 1px solid rgba(255, 255, 255, 0.15);
           cursor: pointer;
@@ -276,6 +317,9 @@ export default function Lobby({ roomCode, players, maxPlayers = 3, localPlayerId
       <div className="lobby-grid-columns" style={{ gridTemplateColumns: `repeat(${maxPlayers}, 1fr)` }}>
         {slots.map((slot) => {
           const player = getPlayerInPosition(slot.position);
+          const isLocal = player?.socketId === localPlayerInRoom?.socketId;
+          const playerColor = player ? (isLocal ? (player.color || localShipColor) : player.color) : null;
+
           return (
             <div key={slot.position} className="hologram-slot">
               <div className="slot-title">{slot.label}</div>
@@ -284,7 +328,18 @@ export default function Lobby({ roomCode, players, maxPlayers = 3, localPlayerId
                 <>
                   <div className="pilot-name">{player.username}</div>
                   <div style={{ display: 'flex', gap: '0.3rem', height: '18px' }}>
-                    {player.isHost && <span className="role-indicator">Host</span>}
+                    {player.isHost && (
+                      <span 
+                        className="role-indicator"
+                        style={{
+                          color: playerColor ? `var(--neon-${playerColor})` : 'var(--neon-blue)',
+                          borderColor: playerColor ? `rgba(${playerColor === 'red' ? '207, 64, 66' : playerColor === 'green' ? '46, 189, 89' : '74, 144, 226'}, 0.25)` : 'rgba(51, 204, 255, 0.2)',
+                          background: playerColor ? `rgba(${playerColor === 'red' ? '207, 64, 66' : playerColor === 'green' ? '46, 189, 89' : '74, 144, 226'}, 0.02)` : 'rgba(51, 204, 255, 0.02)'
+                        }}
+                      >
+                        Host
+                      </span>
+                    )}
                     {player.socketId === localPlayerId && (
                       <span 
                         className="role-indicator" 
@@ -297,14 +352,56 @@ export default function Lobby({ roomCode, players, maxPlayers = 3, localPlayerId
                         You
                       </span>
                     )}
+                    {!player.isHost && (
+                      <span 
+                        className="role-indicator" 
+                        style={{ 
+                          borderColor: player.isReady ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)', 
+                          color: player.isReady ? 'var(--neon-green)' : 'var(--neon-red)', 
+                          background: player.isReady ? 'rgba(34, 197, 94, 0.05)' : 'rgba(239, 68, 68, 0.05)' 
+                        }}
+                      >
+                        {player.isReady ? 'Ready' : 'Not Ready'}
+                      </span>
+                    )}
                   </div>
                   
-                  {getShipSvg(player.color)}
-                  <div className="hologram-ring" style={{ borderColor: player.color ? `var(--neon-${player.color})` : 'rgba(255,255,255,0.06)' }} />
+                  {getShipSvg(playerColor)}
                   
-                  {player.color ? (
-                    <span style={{ fontSize: '0.75rem', color: `var(--neon-${player.color})`, textTransform: 'uppercase', fontWeight: 600, letterSpacing: '1px', marginTop: '1rem' }}>
-                      {player.color} Registered
+                  {isLocal ? (
+                    <button
+                      onClick={onOpenProfileEdit}
+                      className="btn-profile-edit-lobby"
+                      style={{
+                        marginTop: '1rem',
+                        fontSize: '0.7rem',
+                        color: playerColor ? `var(--neon-${playerColor})` : 'var(--neon-blue)',
+                        border: playerColor ? `1px solid var(--neon-${playerColor})` : '1px solid rgba(255, 255, 255, 0.15)',
+                        background: 'rgba(255, 255, 255, 0.02)',
+                        padding: '0.35rem 0.9rem',
+                        cursor: 'pointer',
+                        borderRadius: '2px',
+                        textTransform: 'uppercase',
+                        letterSpacing: '1.5px',
+                        fontFamily: 'var(--font-display)',
+                        transition: 'all 0.2s',
+                        outline: 'none',
+                        boxShadow: playerColor ? `0 0 6px rgba(${playerColor === 'red' ? '207, 64, 66' : playerColor === 'green' ? '46, 189, 89' : '74, 144, 226'}, 0.15)` : 'none'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = playerColor ? `rgba(${playerColor === 'red' ? '207, 64, 66' : playerColor === 'green' ? '46, 189, 89' : '74, 144, 226'}, 0.08)` : 'rgba(255, 255, 255, 0.08)';
+                        e.currentTarget.style.boxShadow = playerColor ? `0 0 10px var(--neon-${playerColor})` : '0 0 8px rgba(51, 204, 255, 0.2)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)';
+                        e.currentTarget.style.boxShadow = playerColor ? `0 0 6px rgba(${playerColor === 'red' ? '207, 64, 66' : playerColor === 'green' ? '46, 189, 89' : '74, 144, 226'}, 0.15)` : 'none';
+                      }}
+                    >
+                      PILOT IDENTITY
+                    </button>
+                  ) : playerColor ? (
+                    <span style={{ fontSize: '0.75rem', color: `var(--neon-${playerColor})`, textTransform: 'uppercase', fontWeight: 600, letterSpacing: '1px', marginTop: '1rem' }}>
+                      {playerColor} Registered
                     </span>
                   ) : (
                     <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontStyle: 'italic', marginTop: '1rem', opacity: 0.6 }}>
@@ -325,28 +422,6 @@ export default function Lobby({ roomCode, players, maxPlayers = 3, localPlayerId
         })}
       </div>
 
-      {/* Local Color Picker panel */}
-      {localPlayerInRoom && (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '3.5rem' }}>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-display)', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '1.2rem', opacity: 0.7 }}>
-            Select Defensive Color
-          </div>
-          <div style={{ display: 'flex', gap: '1.5rem' }}>
-            {['red', 'blue', 'green'].map((color) => {
-              const isSelected = localPlayerColor === color;
-              return (
-                <button
-                  key={color}
-                  className={`console-pick-circle ${color} ${isSelected ? 'selected' : ''}`}
-                  onClick={() => handleColorClick(color)}
-                  title={`Select ${color} registration`}
-                />
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {/* Action Buttons */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', width: '100%' }}>
         {isHost ? (
@@ -355,18 +430,40 @@ export default function Lobby({ roomCode, players, maxPlayers = 3, localPlayerId
               className="btn-console-action" 
               disabled={!canStart}
               onClick={handleStart}
+              style={{
+                borderColor: canStart ? 'var(--neon-green)' : 'rgba(255,255,255,0.15)',
+                color: canStart ? '#ffffff' : 'var(--text-secondary)',
+                boxShadow: canStart ? '0 0 15px rgba(34, 197, 94, 0.25)' : 'none'
+              }}
             >
-              {!isLobbyFull ? 'Link 3 Pilots to Start' : 'Initiate Attack Wave'}
+              LAUNCH MISSION
             </button>
-            {!isLobbyFull && (
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-body)', opacity: 0.5 }}>
-                VanguarDZ Co-op matrices require exactly 3 linked fighters.
+            {!canStart && (
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-body)', opacity: 0.5, marginTop: '0.6rem', textAlign: 'center' }}>
+                {!isLobbyFull 
+                  ? `Launch disabled. Squadron requires exactly ${maxPlayers} linked fighters (current: ${players.length}/${maxPlayers}).` 
+                  : !allOthersReady 
+                    ? "Launch disabled. Waiting for all squadron members to Ready Up." 
+                    : "Launch disabled. Check color conflict configuration (all pilots must have unique colors)."}
               </p>
             )}
           </>
         ) : (
-          <div style={{ fontFamily: 'var(--font-display)', color: 'var(--text-secondary)', fontSize: '0.8rem', letterSpacing: '2px', textTransform: 'uppercase', opacity: 0.5, marginBottom: '1rem' }}>
-            Awaiting Host command launch...
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', gap: '0.5rem' }}>
+            <button
+              className="btn-console-action"
+              onClick={handleToggleReadyClick}
+              style={{
+                borderColor: localPlayerInRoom?.isReady ? 'var(--neon-green)' : 'var(--neon-red)',
+                boxShadow: localPlayerInRoom?.isReady ? '0 0 15px rgba(34, 197, 94, 0.25)' : 'none',
+                color: '#ffffff'
+              }}
+            >
+              {localPlayerInRoom?.isReady ? 'READY (Cancel)' : 'READY FOR LAUNCH'}
+            </button>
+            <div style={{ fontFamily: 'var(--font-display)', color: 'var(--text-secondary)', fontSize: '0.75rem', letterSpacing: '2px', textTransform: 'uppercase', opacity: 0.5, marginTop: '0.8rem' }}>
+              Awaiting Host command launch...
+            </div>
           </div>
         )}
 

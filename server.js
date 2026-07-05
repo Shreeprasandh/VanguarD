@@ -78,6 +78,7 @@ function getRoomPlayersData(roomId) {
       color: p.color,
       position: p.position,
       isHost: p.isHost,
+      isReady: p.isHost ? true : !!p.isReady,
       score: globalPlayer ? globalPlayer.score : 0,
       level: globalPlayer ? globalPlayer.level : 1,
       skills: p.skills || [],
@@ -100,6 +101,12 @@ wss.on('connection', (ws) => {
     roomId: null
   });
 
+  // Send registration ID to client
+  ws.send(JSON.stringify({
+    type: 'REGISTERED',
+    socketId: socketId
+  }));
+
   // Send initial leaderboard update to new connector
   broadcastHighScores();
 
@@ -112,6 +119,7 @@ wss.on('connection', (ws) => {
       switch (data.type) {
         case 'REGISTER': {
           player.username = data.username || player.username;
+          if (data.color) player.color = data.color;
           broadcastHighScores();
           break;
         }
@@ -176,10 +184,12 @@ wss.on('connection', (ws) => {
             code,
             players: [{
               socketId,
-              username: player.username,
-              color: null,
+              username: data.username || player.username,
+              color: data.color || player.color || null,
+              skills: data.skills || [],
               position: maxPlayers === 2 ? 'left' : 'center', // If 2 players, host starts as 'left'
-              isHost: true
+              isHost: true,
+              isReady: true
             }],
             state: 'lobby',
             wave: 1,
@@ -242,10 +252,12 @@ wss.on('connection', (ws) => {
 
           room.players.push({
             socketId,
-            username: player.username,
-            color: null,
+            username: data.username || player.username,
+            color: data.color || player.color || null,
+            skills: data.skills || [],
             position,
-            isHost: false
+            isHost: false,
+            isReady: false
           });
 
           player.roomId = code;
@@ -280,6 +292,46 @@ wss.on('connection', (ws) => {
           const roomPlayer = room.players.find(p => p.socketId === socketId);
           if (roomPlayer) {
             roomPlayer.color = chosenColor;
+            roomPlayer.isReady = false; // Reset ready on color change
+          }
+
+          sendToRoom(code, {
+            type: 'ROOM_PLAYERS_UPDATE',
+            players: getRoomPlayersData(code),
+            maxPlayers: room.maxPlayers
+          });
+          break;
+        }
+
+        case 'TOGGLE_READY': {
+          const code = player.roomId;
+          const room = rooms.get(code);
+          if (!room) break;
+
+          const roomPlayer = room.players.find(p => p.socketId === socketId);
+          if (roomPlayer && !roomPlayer.isHost) {
+            roomPlayer.isReady = !roomPlayer.isReady;
+          }
+
+          sendToRoom(code, {
+            type: 'ROOM_PLAYERS_UPDATE',
+            players: getRoomPlayersData(code),
+            maxPlayers: room.maxPlayers
+          });
+          break;
+        }
+
+        case 'UPDATE_PROFILE': {
+          const code = player.roomId;
+          const room = rooms.get(code);
+          if (!room) break;
+
+          const roomPlayer = room.players.find(p => p.socketId === socketId);
+          if (roomPlayer) {
+            roomPlayer.username = data.username || roomPlayer.username;
+            roomPlayer.color = data.color || roomPlayer.color;
+            roomPlayer.skills = data.skills || roomPlayer.skills;
+            roomPlayer.isReady = false; // Reset ready on profile update
           }
 
           sendToRoom(code, {
