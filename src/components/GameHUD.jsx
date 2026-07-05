@@ -27,7 +27,7 @@ export default function GameHUD({ score, multiplier, wave, isMultiplayer, teamPl
             </span>
           </div>
 
-          {/* Vertical Health Bar (white color, 50% transparency) */}
+          {/* Vertical Health Bar (white color, 25% opacity / 75% transparency) */}
           {(() => {
             const safeHealth = (typeof health === 'number' && !isNaN(health)) ? health : 100;
             return (
@@ -36,13 +36,13 @@ export default function GameHUD({ score, multiplier, wave, isMultiplayer, teamPl
                   style={{
                     width: '8px',
                     height: '112px',
-                    border: '1px solid rgba(255, 255, 255, 0.3)',
-                    background: 'rgba(255, 255, 255, 0.08)',
+                    border: '1px solid rgba(255, 255, 255, 0.25)',
+                    background: 'rgba(255, 255, 255, 0.05)',
                     borderRadius: '4px',
                     position: 'relative',
                     overflow: 'hidden',
                     opacity: 0.95,
-                    boxShadow: '0 0 6px rgba(255, 255, 255, 0.1)'
+                    boxShadow: '0 0 4px rgba(255, 255, 255, 0.05)'
                   }}
                   title={`Ship Integrity: ${Math.round(safeHealth)}%`}
                 >
@@ -53,7 +53,7 @@ export default function GameHUD({ score, multiplier, wave, isMultiplayer, teamPl
                       left: 0,
                       width: '100%',
                       height: `${Math.max(0, Math.min(100, safeHealth))}%`,
-                      background: 'rgba(255, 255, 255, 0.5)',
+                      background: 'rgba(255, 255, 255, 0.25)',
                       transition: 'height 0.15s ease'
                     }}
                   />
@@ -64,7 +64,7 @@ export default function GameHUD({ score, multiplier, wave, isMultiplayer, teamPl
                     fontFamily: 'var(--font-display)', 
                     color: '#ffffff', 
                     letterSpacing: '0.5px',
-                    opacity: 0.5,
+                    opacity: 0.25,
                     fontWeight: 'normal',
                     transition: 'all 0.2s ease'
                   }}
