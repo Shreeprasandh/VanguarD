@@ -319,6 +319,20 @@ export default function GameCanvas({
             break;
           }
 
+          case 'REPLICATOR_SPLIT': {
+            // Remove parent
+            state.enemies = state.enemies.filter(e => e.id !== data.parentId);
+            if (state.activeWordId === data.parentId) state.activeWordId = null;
+            
+            // Add children
+            if (data.child1 && data.child2) {
+              state.enemies.push(data.child1, data.child2);
+              createExplosion((data.child1.x + data.child2.x) / 2, data.child1.y - 10, getColorHex(data.child1.color), 18, true);
+              GameAudio.play('explosionSmall', getPan((data.child1.x + data.child2.x) / 2));
+            }
+            break;
+          }
+
           case 'SYNC_BOSS_PHASE': {
             // Start boss fight phase on clients
             state.waveState = 'boss_fight';
@@ -1085,6 +1099,11 @@ export default function GameCanvas({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    // Reveal Stealth Cloaker on typing strike
+    if (enemy.type === 'stealth_cloaker') {
+      enemy.revealTimer = 90; // Reveal for 1.5 seconds
+    }
+
     // Aegis Vindicator shield arc block check
     if (state.bossObj && state.bossObj.name === 'AEGIS VINDICATOR' && enemy.id.startsWith('boss-w-')) {
       const angle = (Date.now() * 0.0018) % (Math.PI * 2);
@@ -1636,6 +1655,103 @@ export default function GameCanvas({
         }
       }
 
+      // Cloaker Active Camouflage Cycle
+      if (enemy.type === 'stealth_cloaker') {
+        const cycle = (Date.now() % 6000); // 6s cycle
+        let cloakDuration = 2000;
+        if (state.wave >= 35) {
+          cloakDuration = 3200;
+        } else if (state.wave >= 21) {
+          cloakDuration = 2600;
+        }
+        
+        const isCloakingPhase = cycle < cloakDuration;
+        let targetOpacity = isCloakingPhase ? 0.05 : 1.0;
+        
+        if (enemy.revealTimer && enemy.revealTimer > 0) {
+          enemy.revealTimer -= 1;
+          targetOpacity = 1.0;
+        }
+        
+        enemy.opacity = enemy.opacity !== undefined ? enemy.opacity : 1.0;
+        enemy.opacity += (targetOpacity - enemy.opacity) * 0.1;
+      }
+
+      // Replicator Split Clock
+      if (enemy.type === 'replicator') {
+        let maxFrames = 390; // 6.5s
+        if (state.wave >= 46) maxFrames = 240; // 4.0s
+        else if (state.wave >= 26) maxFrames = 300; // 5.0s
+        
+        enemy.splitMaxTimer = maxFrames;
+        enemy.splitTimer = (enemy.splitTimer !== undefined ? enemy.splitTimer : maxFrames) - 1;
+        
+        if (enemy.splitTimer <= 0 && isHost) {
+          // Trigger split!
+          const id1 = Math.random().toString(36).substring(2, 9);
+          const id2 = Math.random().toString(36).substring(2, 9);
+          
+          const childType = state.wave >= 46 ? 'interceptor' : 'drone';
+          const childLen = state.wave >= 26 ? 4 : 3;
+          
+          const rawWord = getWordForEnemy(childType, state.wave, state.usedWords);
+          const word1 = rawWord.substring(0, childLen);
+          const word2 = getWordForEnemy(childType, state.wave, state.usedWords).substring(0, childLen);
+          
+          const childSpeed = enemy.speed * 1.35;
+          const leftX = Math.max(canvas.width * 0.22, enemy.x - 38);
+          const rightX = Math.min(canvas.width * 0.78, enemy.x + 38);
+          
+          const child1 = {
+            id: id1,
+            word: word1,
+            wordQueue: [],
+            color: enemy.color,
+            x: leftX,
+            y: enemy.y + 10,
+            speed: childSpeed,
+            targetIndex: 0,
+            type: childType,
+            shootCooldown: 150,
+            movementPattern: 'straight',
+            patternAge: 0,
+            dirMultiplier: Math.random() < 0.5 ? 1 : -1
+          };
+          
+          const child2 = {
+            id: id2,
+            word: word2,
+            wordQueue: [],
+            color: enemy.color,
+            x: rightX,
+            y: enemy.y + 10,
+            speed: childSpeed,
+            targetIndex: 0,
+            type: childType,
+            shootCooldown: 150,
+            movementPattern: 'straight',
+            patternAge: 0,
+            dirMultiplier: Math.random() < 0.5 ? 1 : -1
+          };
+          
+          if (isMultiplayer && socket) {
+            socket.send(JSON.stringify({
+              type: 'REPLICATOR_SPLIT',
+              parentId: enemy.id,
+              child1,
+              child2
+            }));
+          }
+          
+          createExplosion(enemy.x, enemy.y, getColorHex(enemy.color), 18, true);
+          GameAudio.play('explosionSmall', getPan(enemy.x));
+          
+          enemy.splitTriggered = true;
+          enemy.child1 = child1;
+          enemy.child2 = child2;
+        }
+      }
+
       // Decrement status timers
       if (enemy.freezeTime > 0) enemy.freezeTime -= 16.7;
       if (enemy.slowTime > 0) enemy.slowTime -= 16.7;
@@ -1761,6 +1877,18 @@ export default function GameCanvas({
         GameAudio.play('explosionLarge');
       }
     });
+
+    // Handle Replicator splits after physics iteration to avoid collection mutation crash
+    const replicatedChildren = [];
+    state.enemies.forEach(enemy => {
+      if (enemy.splitTriggered && enemy.child1 && enemy.child2) {
+        replicatedChildren.push(enemy.child1, enemy.child2);
+      }
+    });
+    if (replicatedChildren.length > 0) {
+      state.enemies = state.enemies.filter(e => !e.splitTriggered);
+      state.enemies.push(...replicatedChildren);
+    }
 
     state.bullets.forEach(bullet => {
       let bulletFactor = 1.0;
@@ -1929,18 +2057,24 @@ export default function GameCanvas({
       let hp = 1;
       
       const rng = Math.random();
-      if (state.wave >= 11 && rng > 0.92) {
+      if (state.wave >= 16 && rng > 0.96) {
+        type = 'replicator';
+        speed = 0.45 + Math.random() * 0.15;
+      } else if (state.wave >= 12 && rng > 0.91 && rng <= 0.96) {
+        type = 'stealth_cloaker';
+        speed = 0.5 + Math.random() * 0.2;
+      } else if (state.wave >= 11 && rng > 0.84 && rng <= 0.91) {
         type = 'shield_linker';
         speed = 0.4 + Math.random() * 0.15;
-      } else if (state.wave >= 7 && rng > 0.82) {
+      } else if (state.wave >= 7 && rng > 0.70 && rng <= 0.84) {
         type = 'cruiser'; // General
         speed = 0.3 + Math.random() * 0.2;
         hp = 2;
-      } else if (state.wave >= 5 && rng > 0.70) {
+      } else if (state.wave >= 5 && rng > 0.52 && rng <= 0.70) {
         type = 'kamikaze';
         const waveScale = Math.min(1.0, (state.wave - 5) / 20); // 0.0 at wave 5, scaling to 1.0 at wave 25+
         speed = (0.7 + waveScale * 0.6) + Math.random() * (0.2 + waveScale * 0.1);
-      } else if (state.wave >= 3 && rng > 0.50) {
+      } else if (state.wave >= 3 && rng > 0.30 && rng <= 0.52) {
         type = 'interceptor'; // Elite
         speed = 0.9 + Math.random() * 0.4;
       }
@@ -3221,6 +3355,9 @@ export default function GameCanvas({
     // Draw Enemies (Descending ships with words)
     state.enemies.forEach(enemy => {
       ctx.save();
+      if (enemy.type === 'stealth_cloaker') {
+        ctx.globalAlpha = enemy.opacity !== undefined ? enemy.opacity : 1.0;
+      }
       let jitterX = 0;
       if (state.enemies.some(e => e.type === 'anomaly') && enemy.type !== 'anomaly') {
         jitterX = (Math.random() - 0.5) * 1.5;
@@ -3249,7 +3386,39 @@ export default function GameCanvas({
 
       // Draw procedural enemy design based on class - scaled up by 1.6x
       ctx.beginPath();
-      if (enemy.type === 'interceptor') {
+      if (enemy.type === 'stealth_cloaker') {
+        // Spy drone shape
+        ctx.beginPath();
+        ctx.moveTo(0, 16);
+        ctx.lineTo(16, -10);
+        ctx.lineTo(6, -4);
+        ctx.lineTo(0, -12);
+        ctx.lineTo(-6, -4);
+        ctx.lineTo(-16, -10);
+        ctx.closePath();
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.arc(0, 0, 8, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (enemy.type === 'replicator') {
+        // Double diamond geometric shape
+        ctx.beginPath();
+        ctx.moveTo(0, 18);
+        ctx.lineTo(12, 0);
+        ctx.lineTo(0, -18);
+        ctx.lineTo(-12, 0);
+        ctx.closePath();
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(-6, 0);
+        ctx.lineTo(0, -8);
+        ctx.lineTo(6, 0);
+        ctx.lineTo(0, 8);
+        ctx.closePath();
+        ctx.stroke();
+      } else if (enemy.type === 'interceptor') {
         // Sleek forward-swept wing fighter (Elite - 40 variants)
         ctx.moveTo(0, 24);
         ctx.lineTo(20, -12);
@@ -3521,6 +3690,9 @@ export default function GameCanvas({
 
       // Draw text word label centered above the ship
       ctx.save();
+      if (enemy.type === 'stealth_cloaker') {
+        ctx.globalAlpha = enemy.opacity !== undefined ? enemy.opacity : 1.0;
+      }
       const isTargeted = state.activeWordId === enemy.id;
       ctx.font = isTargeted ? '700 21px Consolas, monospace' : '700 19px Consolas, monospace';
       ctx.textAlign = 'center';
@@ -3582,6 +3754,22 @@ export default function GameCanvas({
           const secondsLeft = (enemy.kamikazeTimer / 60).toFixed(1);
           ctx.fillText(`${secondsLeft}s`, 0, -48);
         }
+      }
+
+      // Draw split timer bar for Replicators
+      if (enemy.type === 'replicator' && enemy.splitTimer !== undefined) {
+        ctx.save();
+        const pct = Math.max(0, enemy.splitTimer / enemy.splitMaxTimer);
+        ctx.fillStyle = '#22c55e'; // green timer
+        ctx.strokeStyle = 'rgba(34, 197, 94, 0.2)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(-25, -48, 50, 4);
+        ctx.fillRect(-25, -48, 50 * pct, 4);
+        
+        ctx.fillStyle = '#22c55e';
+        ctx.font = '700 9px Orbitron, sans-serif';
+        ctx.fillText(`SPLIT: ${(enemy.splitTimer / 60).toFixed(1)}s`, 0, -54);
+        ctx.restore();
       }
 
       ctx.restore();

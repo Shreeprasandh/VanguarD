@@ -122,7 +122,7 @@ export function getWordForEnemy(type, waveNumber, usedSet) {
       commonCandidates = WORDS_MEDIUM_COMMON;
       rareCandidates = WORDS_MEDIUM_RARE;
     }
-  } else if (type === 'interceptor' || type === 'kamikaze') {
+  } else if (type === 'interceptor' || type === 'kamikaze' || type === 'stealth_cloaker') {
     if (waveNumber <= 5) {
       commonCandidates = WORDS_MEDIUM_COMMON;
       rareCandidates = WORDS_MEDIUM_RARE;
@@ -130,7 +130,7 @@ export function getWordForEnemy(type, waveNumber, usedSet) {
       commonCandidates = WORDS_HARD_COMMON;
       rareCandidates = WORDS_HARD_RARE;
     }
-  } else if (type === 'cruiser' || type === 'shield_linker') {
+  } else if (type === 'cruiser' || type === 'shield_linker' || type === 'replicator') {
     if (waveNumber <= 28) {
       commonCandidates = WORDS_HARD_COMMON;
       rareCandidates = WORDS_HARD_RARE;

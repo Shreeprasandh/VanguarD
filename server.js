@@ -475,6 +475,18 @@ wss.on('connection', (ws) => {
           break;
         }
 
+        case 'REPLICATOR_SPLIT': {
+          if (player.roomId) {
+            sendToRoom(player.roomId, {
+              type: 'REPLICATOR_SPLIT',
+              parentId: data.parentId,
+              child1: data.child1,
+              child2: data.child2
+            }, socketId);
+          }
+          break;
+        }
+
         case 'PLAYER_HIT': {
           if (player.roomId) {
             sendToRoom(player.roomId, {
