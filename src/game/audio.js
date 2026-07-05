@@ -172,6 +172,17 @@ class AudioManager {
         thudOsc.start(t);
         noiseNode.stop(t + 0.05);
         thudOsc.stop(t + 0.05);
+
+        // Schedule auto-disconnect to prevent memory leak and periodic GC pop
+        setTimeout(() => {
+          try {
+            noiseNode.disconnect();
+            thudOsc.disconnect();
+            noiseGain.disconnect();
+            thudGain.disconnect();
+            panner.disconnect();
+          } catch (e) {}
+        }, 150);
       } catch (e) {
         console.warn('Procedural mechanical key click failed, falling back:', e);
       }
@@ -206,6 +217,15 @@ class AudioManager {
         panner.connect(ctx.destination);
         
         source.start(0);
+
+        // Schedule auto-disconnect to prevent memory leak and periodic GC pop
+        source.onended = () => {
+          try {
+            source.disconnect();
+            gainNode.disconnect();
+            panner.disconnect();
+          } catch (e) {}
+        };
         return;
       } catch (e) {
         console.warn(`Web Audio playback failed for ${soundName}, falling back to HTML5 Audio:`, e);
@@ -794,7 +814,15 @@ class AudioManager {
         [146.83, 174.61, 220.00, 293.66], // Dm7
         [220.00, 261.63, 329.63, 392.00], // Am7
         [174.61, 220.00, 261.63, 349.23], // Fmaj7
-        [164.81, 207.65, 246.94, 329.63]  // E7 (Haunting resolution!)
+        [164.81, 207.65, 246.94, 329.63], // E7 (Haunting resolution!)
+        [261.63, 329.63, 392.00, 493.88], // Cmaj7 (Section B shift)
+        [196.00, 246.94, 293.66, 392.00], // G7
+        [220.00, 261.63, 329.63, 392.00], // Am7
+        [164.81, 196.00, 246.94, 329.63], // Em7
+        [174.61, 220.00, 261.63, 349.23], // Fmaj7
+        [261.63, 329.63, 392.00, 493.88], // Cmaj7
+        [146.83, 174.61, 220.00, 293.66], // Dm7
+        [164.81, 207.65, 246.94, 329.63]  // E7 (Return modulation)
       ];
       let progIdx = 0;
       
@@ -806,7 +834,15 @@ class AudioManager {
         4: [440.00, 523.25, 587.33, 698.46, 880.00, 1046.50, 1174.66, 1318.51],       // Dm7
         5: [440.00, 523.25, 587.33, 659.25, 783.99, 880.00, 1046.50, 1174.66, 1318.51], // Am7
         6: [440.00, 523.25, 659.25, 698.46, 783.99, 880.00, 1046.50, 1318.51],        // Fmaj7
-        7: [415.30, 493.88, 587.33, 659.25, 830.61, 987.77, 1318.51]                 // E7 (G# scale resolution)
+        7: [415.30, 493.88, 587.33, 659.25, 830.61, 987.77, 1318.51],                 // E7 (G# scale resolution)
+        8: [493.88, 523.25, 659.25, 783.99, 880.00, 987.77, 1046.50, 1318.51],        // Cmaj7
+        9: [392.00, 493.88, 587.33, 698.46, 783.99, 880.00, 987.77, 1174.66],        // G7
+        10: [440.00, 523.25, 587.33, 659.25, 783.99, 880.00, 1046.50, 1174.66, 1318.51], // Am7
+        11: [329.63, 392.00, 440.00, 493.88, 587.33, 659.25, 783.99, 987.77],          // Em7
+        12: [440.00, 523.25, 659.25, 698.46, 783.99, 880.00, 1046.50, 1318.51],        // Fmaj7
+        13: [493.88, 523.25, 659.25, 783.99, 880.00, 987.77, 1046.50, 1318.51],        // Cmaj7
+        14: [440.00, 523.25, 587.33, 698.46, 880.00, 1046.50, 1174.66, 1318.51],       // Dm7
+        15: [415.30, 493.88, 587.33, 659.25, 830.61, 987.77, 1318.51]                 // E7
       };
 
       // Composition patterns: index pathways on the active scale bank
@@ -814,7 +850,12 @@ class AudioManager {
         { indices: [0, 2, 4, 3, 2], delays: [0.75, 1.5, 2.25, 3.0, 4.5] },
         { indices: [4, 3, 2, 1, 2], delays: [0.75, 1.5, 2.25, 3.0, 3.75] },
         { indices: [2, 4, 5, 4, 2], delays: [0.75, 1.5, 2.25, 3.0, 4.5] },
-        { indices: [0, 1, 2, 3, 4, 2], delays: [0.75, 1.5, 2.25, 3.0, 3.75, 4.5] }
+        { indices: [0, 1, 2, 3, 4, 2], delays: [0.75, 1.5, 2.25, 3.0, 3.75, 4.5] },
+        { indices: [4, 5, 7, 5, 4], delays: [0.75, 1.5, 2.25, 3.0, 4.5] },
+        { indices: [0, 2, 3, 2, 0], delays: [0.75, 1.5, 2.25, 3.0, 3.75] },
+        { indices: [3, 5, 6, 5, 3], delays: [0.75, 1.5, 2.25, 3.0, 4.5] },
+        { indices: [5, 4, 3, 2, 0], delays: [0.75, 1.5, 2.25, 3.0, 3.75, 4.5] },
+        { indices: [1, 3, 5, 4, 2], delays: [0.75, 1.5, 2.25, 3.0, 4.5] }
       ];
       let patternIdx = 0;
 
@@ -965,6 +1006,10 @@ class AudioManager {
         [220.00, 261.63, 329.63], // Am
         [146.83, 174.61, 220.00], // Dm
         [261.63, 329.63, 392.00], // C
+        [164.81, 196.00, 246.94], // Em
+        [174.61, 220.00, 261.63], // F
+        [196.00, 246.94, 293.66], // G
+        [220.00, 261.63, 329.63], // Am
         [164.81, 196.00, 246.94]  // Em
       ];
       let chordIdx = 0;
@@ -978,11 +1023,26 @@ class AudioManager {
       delayGain.connect(delayNode);
       delayGain.connect(this.ingameMasterGain);
 
-      const ingameChimes = {
+      const ingameChimesSetA = {
         0: [1318.51, 880.00, 1046.50], // Am: E6, A5, C6
         1: [1396.91, 880.00, 1174.66], // Dm: F6, A5, D6
         2: [1318.51, 783.99, 1046.50], // C: E6, G5, C6
-        3: [1567.98, 987.77, 1318.51]  // Em: G6, B5, E6
+        3: [1567.98, 987.77, 1318.51], // Em: G6, B5, E6
+        4: [1396.91, 880.00, 1046.50], // F: F6, A5, C6
+        5: [1567.98, 987.77, 1174.66], // G: G6, B5, D6
+        6: [1318.51, 880.00, 1046.50], // Am: E6, A5, C6
+        7: [1567.98, 987.77, 1318.51]  // Em: G6, B5, E6
+      };
+
+      const ingameChimesSetB = {
+        0: [1046.50, 1318.51, 1760.00], // Am: C6, E6, A6
+        1: [1174.66, 1396.91, 2093.00], // Dm: D6, F6, C7
+        2: [1046.50, 1318.51, 1567.98], // C: C6, E6, G6
+        3: [1318.51, 1567.98, 1975.53], // Em: E6, G6, B6
+        4: [1046.50, 1396.91, 1760.00], // F: C6, F6, A6
+        5: [1174.66, 1567.98, 1975.53], // G: D6, G6, B6
+        6: [1046.50, 1318.51, 1760.00], // Am: C6, E6, A6
+        7: [1318.51, 1567.98, 1975.53]  // Em: E6, G6, B6
       };
 
       const playChords = (t) => {
@@ -1012,8 +1072,8 @@ class AudioManager {
           osc.stop(t + 4.0);
         });
 
-        // Play the 3 soothing chimes at sample-accurate beat delays (completely organized, no random walks)
-        const chimePitches = ingameChimes[activeChordIdx] || ingameChimes[0];
+        // Play the 3 soothing chimes at sample-accurate beat delays with alternative Set A/B variety
+        const chimePitches = Math.random() < 0.5 ? ingameChimesSetA[activeChordIdx] : ingameChimesSetB[activeChordIdx];
         const chimeDelays = [0.6, 1.8, 3.0];
         
         chimePitches.forEach((chimeFreq, idx) => {
