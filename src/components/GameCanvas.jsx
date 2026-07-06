@@ -296,6 +296,8 @@ export default function GameCanvas({
         const data = JSON.parse(event.data);
         const state = stateRef.current;
         const players = state.players || [];
+        const canvas = canvasRef.current;
+        if (!canvas) return;
 
         switch (data.type) {
           case 'ROOM_PLAYERS_UPDATE': {
