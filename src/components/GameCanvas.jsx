@@ -1656,6 +1656,12 @@ export default function GameCanvas({
 
     if (state.isPaused) return;
 
+    // Calculate delta time (dt) normalized to 60 FPS target (1 frame = 16.667ms)
+    const now = performance.now();
+    const elapsed = now - (state.lastFrameTime || now);
+    state.lastFrameTime = now;
+    const dt = Math.max(0.1, Math.min(3.0, elapsed / 16.667));
+
     const players = state.players || [];
     const isHost = !isMultiplayer || (players.find(p => p.socketId === socket?.id)?.isHost);
 
@@ -2299,9 +2305,9 @@ export default function GameCanvas({
       }
 
       // Decrement status timers
-      if (enemy.freezeTime > 0) enemy.freezeTime -= 16.7;
-      if (enemy.slowTime > 0) enemy.slowTime -= 16.7;
-      if (enemy.anchoredTime > 0) enemy.anchoredTime -= 16.7;
+      if (enemy.freezeTime > 0) enemy.freezeTime -= 16.7 * dt;
+      if (enemy.slowTime > 0) enemy.slowTime -= 16.7 * dt;
+      if (enemy.anchoredTime > 0) enemy.anchoredTime -= 16.7 * dt;
 
       let speedFactor = 1.0;
       if (enemy.freezeTime > 0 || enemy.anchoredTime > 0) {
@@ -2311,70 +2317,71 @@ export default function GameCanvas({
       }
 
       const pat = enemy.movementPattern || 'straight';
+      const easeFactor = Math.min(1.0, 0.15 * dt);
       if (!isHost) {
         if (enemy.serverY !== undefined) {
           // Progress the server authoritative target coordinate forward by the same speed/skills logic
-          const dy = enemy.speed * baseSpeedMultiplier * multiplayerDifficulty * speedFactor;
+          const dy = enemy.speed * baseSpeedMultiplier * multiplayerDifficulty * speedFactor * dt;
           enemy.serverY += dy;
           
           if (speedFactor > 0) {
-            enemy.patternAge = (enemy.patternAge || 0) + 1;
+            enemy.patternAge = (enemy.patternAge || 0) + 1 * dt;
             
             if (enemy.type === 'drone' && pat !== 'straight') {
-              enemy.serverX += Math.sin(enemy.patternAge * 0.04) * 0.65 * speedFactor;
+              enemy.serverX += Math.sin(enemy.patternAge * 0.04) * 0.65 * speedFactor * dt;
             } else if (pat === 'sine') {
-              enemy.serverX += (enemy.dirMultiplier || 1) * Math.sin(enemy.serverY * 0.02) * 1.8 * speedFactor;
+              enemy.serverX += (enemy.dirMultiplier || 1) * Math.sin(enemy.serverY * 0.02) * 1.8 * speedFactor * dt;
             } else if (pat === 'cosine') {
-              enemy.serverX += (enemy.dirMultiplier || 1) * Math.cos(enemy.serverY * 0.02) * 1.8 * speedFactor;
+              enemy.serverX += (enemy.dirMultiplier || 1) * Math.cos(enemy.serverY * 0.02) * 1.8 * speedFactor * dt;
             } else if (pat === 'zigzag') {
               const zigDir = Math.floor(enemy.patternAge / 55) % 2 === 0 ? 1 : -1;
-              enemy.serverX += (enemy.dirMultiplier || 1) * zigDir * 1.6 * speedFactor;
+              enemy.serverX += (enemy.dirMultiplier || 1) * zigDir * 1.6 * speedFactor * dt;
             } else if (pat === 'drift') {
-              enemy.serverX += (enemy.dirMultiplier || 1) * Math.sin(enemy.patternAge * 0.007) * 2.2 * speedFactor;
+              enemy.serverX += (enemy.dirMultiplier || 1) * Math.sin(enemy.patternAge * 0.007) * 2.2 * speedFactor * dt;
             }
             
             enemy.serverX = Math.max(50, Math.min(canvas.width - 50, enemy.serverX));
           }
 
           // Ease the visual coordinate toward the moving predicted target smoothly
-          enemy.x += (enemy.serverX - enemy.x) * 0.15;
-          enemy.y += (enemy.serverY - enemy.y) * 0.15;
+          enemy.x += (enemy.serverX - enemy.x) * easeFactor;
+          enemy.y += (enemy.serverY - enemy.y) * easeFactor;
         } else {
           // Fallback if sync packet hasn't arrived yet
-          enemy.y += enemy.speed * baseSpeedMultiplier * multiplayerDifficulty * speedFactor;
+          enemy.y += enemy.speed * baseSpeedMultiplier * multiplayerDifficulty * speedFactor * dt;
           if (speedFactor > 0) {
-            enemy.patternAge = (enemy.patternAge || 0) + 1;
+            enemy.patternAge = (enemy.patternAge || 0) + 1 * dt;
             if (enemy.type === 'drone' && pat !== 'straight') {
-              enemy.x += Math.sin(enemy.patternAge * 0.04) * 0.65 * speedFactor;
+              enemy.x += Math.sin(enemy.patternAge * 0.04) * 0.65 * speedFactor * dt;
             } else if (pat === 'sine') {
-              enemy.x += (enemy.dirMultiplier || 1) * Math.sin(enemy.y * 0.02) * 1.8 * speedFactor;
+              enemy.x += (enemy.dirMultiplier || 1) * Math.sin(enemy.y * 0.02) * 1.8 * speedFactor * dt;
             } else if (pat === 'cosine') {
-              enemy.x += (enemy.dirMultiplier || 1) * Math.cos(enemy.y * 0.02) * 1.8 * speedFactor;
+              enemy.x += (enemy.dirMultiplier || 1) * Math.cos(enemy.y * 0.02) * 1.8 * speedFactor * dt;
             } else if (pat === 'zigzag') {
               const zigDir = Math.floor(enemy.patternAge / 55) % 2 === 0 ? 1 : -1;
-              enemy.x += (enemy.dirMultiplier || 1) * zigDir * 1.6 * speedFactor;
+              enemy.x += (enemy.dirMultiplier || 1) * zigDir * 1.6 * speedFactor * dt;
             } else if (pat === 'drift') {
-              enemy.x += (enemy.dirMultiplier || 1) * Math.sin(enemy.patternAge * 0.007) * 2.2 * speedFactor;
+              enemy.x += (enemy.dirMultiplier || 1) * Math.sin(enemy.patternAge * 0.007) * 2.2 * speedFactor * dt;
             }
             enemy.x = Math.max(50, Math.min(canvas.width - 50, enemy.x));
           }
         }
       } else {
         // Host (or single player) authoritative physics
-        enemy.y += enemy.speed * baseSpeedMultiplier * multiplayerDifficulty * speedFactor;
+        enemy.y += enemy.speed * baseSpeedMultiplier * multiplayerDifficulty * speedFactor * dt;
         if (speedFactor > 0) {
-          enemy.patternAge = (enemy.patternAge || 0) + 1;
+          enemy.patternAge = (enemy.patternAge || 0) + 1 * dt;
           if (enemy.type === 'drone' && pat !== 'straight') {
-            enemy.x += Math.sin(enemy.patternAge * 0.04) * 0.65 * speedFactor;
+            enemy.x += Math.sin(enemy.patternAge * 0.04) * 0.65 * speedFactor * dt;
           } else if (pat === 'sine') {
-            enemy.x += (enemy.dirMultiplier || 1) * Math.sin(enemy.y * 0.02) * 1.8 * speedFactor;
+            enemy.x += (enemy.dirMultiplier || 1) * Math.sin(enemy.y * 0.02) * 1.8 * speedFactor * dt;
           } else if (pat === 'cosine') {
-            enemy.x += (enemy.dirMultiplier || 1) * Math.cos(enemy.y * 0.02) * 1.8 * speedFactor;
+            enemy.x += (enemy.dirMultiplier || 1) * Math.cos(enemy.y * 0.02) * 1.8 * speedFactor * dt;
           } else if (pat === 'zigzag') {
             const zigDir = Math.floor(enemy.patternAge / 55) % 2 === 0 ? 1 : -1;
-            enemy.x += (enemy.dirMultiplier || 1) * zigDir * 1.6 * speedFactor;
+            enemy.x += (enemy.dirMultiplier || 1) * zigDir * 1.6 * speedFactor * dt;
           } else if (pat === 'drift') {
-            enemy.x += (enemy.dirMultiplier || 1) * Math.sin(enemy.patternAge * 0.007) * 2.2 * speedFactor;
+            enemy.x += (enemy.dirMultiplier || 1) * Math.sin(enemy.patternAge * 0.007) * 2.2 * speedFactor * dt;
           }
           enemy.x = Math.max(50, Math.min(canvas.width - 50, enemy.x));
         }
@@ -2527,35 +2534,36 @@ export default function GameCanvas({
         bullet.vy = Math.sin(angle) * bullet.speed;
       }
 
+      const easeFactor = Math.min(1.0, 0.15 * dt);
       if (!isHost) {
         if (bullet.serverY !== undefined) {
           // Progress the server authoritative target coordinate forward by the same velocity and time-warp modifiers
           if (bullet.vx !== undefined && bullet.vy !== undefined) {
-            bullet.serverX += bullet.vx * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor;
-            bullet.serverY += bullet.vy * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor;
+            bullet.serverX += bullet.vx * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor * dt;
+            bullet.serverY += bullet.vy * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor * dt;
           } else {
-            bullet.serverY += bullet.speed * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor;
+            bullet.serverY += bullet.speed * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor * dt;
           }
 
           // Ease the visual coordinate toward the moving predicted target smoothly
-          bullet.x += (bullet.serverX - bullet.x) * 0.15;
-          bullet.y += (bullet.serverY - bullet.y) * 0.15;
+          bullet.x += (bullet.serverX - bullet.x) * easeFactor;
+          bullet.y += (bullet.serverY - bullet.y) * easeFactor;
         } else {
           // Fallback if sync packet hasn't arrived yet
           if (bullet.vx !== undefined && bullet.vy !== undefined) {
-            bullet.x += bullet.vx * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor;
-            bullet.y += bullet.vy * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor;
+            bullet.x += bullet.vx * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor * dt;
+            bullet.y += bullet.vy * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor * dt;
           } else {
-            bullet.y += bullet.speed * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor;
+            bullet.y += bullet.speed * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor * dt;
           }
         }
       } else {
         // Host authoritative physics
         if (bullet.vx !== undefined && bullet.vy !== undefined) {
-          bullet.x += bullet.vx * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor;
-          bullet.y += bullet.vy * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor;
+          bullet.x += bullet.vx * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor * dt;
+          bullet.y += bullet.vy * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor * dt;
         } else {
-          bullet.y += bullet.speed * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor;
+          bullet.y += bullet.speed * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor * dt;
         }
       }
 
