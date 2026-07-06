@@ -4332,7 +4332,7 @@ export default function GameCanvas({
         const secLeft = Math.ceil(reviveTimer / 60);
         ctx.fillStyle = 'rgba(239, 68, 68, 0.5)'; // 50% opacity red
         ctx.font = '500 10px Orbitron, sans-serif';
-        ctx.fillText(`REVIVING: ${secLeft}S`, 0, 44);
+        ctx.fillText(`${secLeft}S`, 0, 44);
       }
 
       // Draw tactical shield bubble if active for this player
