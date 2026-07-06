@@ -359,6 +359,10 @@ export default function GameCanvas({
                   serverY: absoluteY,
                   speed: e.speed * canvas.height
                 });
+                // Sync Quantum Anomaly Warning banner on guests
+                if (e.type === 'anomaly') {
+                  state.anomalyWarningTimer = 180;
+                }
               });
             }
             break;
@@ -4979,7 +4983,7 @@ export default function GameCanvas({
     }
 
     // Cutscenes & Banners (e.g. Wave transitions)
-    if (state.waveState === 'intro') {
+    if (state.waveState === 'intro' && (!state.anomalyWarningTimer || state.anomalyWarningTimer <= 0)) {
       ctx.save();
       // Sliding background grid flash
       ctx.fillStyle = 'rgba(255, 255, 255, 0.02)';
