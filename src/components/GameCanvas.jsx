@@ -5221,7 +5221,6 @@ export default function GameCanvas({
               opacity: 0.75, // always glowing at 75%
               transition: 'opacity 0.3s'
             }}
-            title="Defensive Boss Shield cores [5/7]"
           >
             {hudState.defPercent > 0 && (
               <span 
@@ -5337,7 +5336,6 @@ export default function GameCanvas({
                     position: 'relative',
                     overflow: 'hidden'
                   }}
-                  title={empLock ? 'Locked by EMP shock' : `${skill.name} - Cost: ${skill.cost}%`}
                 >
                   {skill.svgIcon(empLock ? '#f59e0b' : skill.color)}
 
@@ -5815,7 +5813,6 @@ export default function GameCanvas({
             togglePause();
           }
         }}
-        title={paused ? 'Resume Game' : 'Pause Game'}
       >
         {paused ? (
           <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style={{ transform: 'translateX(1px)' }}>

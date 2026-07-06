@@ -49,7 +49,6 @@ export default function GameHUD({ score, multiplier, wave, isMultiplayer, teamPl
                 <div 
                   key={mate.socketId} 
                   style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.3rem' }} 
-                  title={`${mate.username}'s Integrity: ${Math.round(mateHealth)}%`}
                 >
                   <div 
                     style={{
@@ -99,7 +98,6 @@ export default function GameHUD({ score, multiplier, wave, isMultiplayer, teamPl
               return (
                 <div 
                   style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.3rem' }} 
-                  title={`Your Integrity: ${Math.round(safeHealth)}%`}
                 >
                   <div 
                     style={{

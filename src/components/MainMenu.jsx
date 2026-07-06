@@ -303,7 +303,6 @@ export default function MainMenu({
               marginBottom: '3.5rem',
               position: 'relative'
             }}
-            title="Click to customize profile"
           >
             <div 
               className={isFirstLoad ? 'boot-ship-animate' : ''}

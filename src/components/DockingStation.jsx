@@ -427,7 +427,6 @@ export default function DockingStation({
                             <div 
                               key={sIdx} 
                               style={{ width: '24px', height: '24px', borderRadius: '50%', border: `1px solid ${sData.color}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                              title={sData.name}
                             >
                               {sData.svgIcon(sData.color)}
                             </div>
