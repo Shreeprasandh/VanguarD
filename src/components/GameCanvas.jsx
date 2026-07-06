@@ -378,8 +378,10 @@ export default function GameCanvas({
                   ...e,
                   x: absoluteX,
                   y: absoluteY,
-                  serverX: absoluteX,
-                  serverY: absoluteY,
+                  physicsX: absoluteX,
+                  physicsY: absoluteY,
+                  offsetX: 0,
+                  offsetY: 0,
                   speed: e.speed * canvas.height
                 });
                 // Sync Quantum Anomaly Warning banner on guests
@@ -485,8 +487,10 @@ export default function GameCanvas({
                 ...b,
                 x: absoluteX,
                 y: absoluteY,
-                serverX: absoluteX,
-                serverY: absoluteY,
+                physicsX: absoluteX,
+                physicsY: absoluteY,
+                offsetX: 0,
+                offsetY: 0,
                 speed: b.speed * canvas.height,
                 vx: b.vx !== undefined ? b.vx * canvas.width : undefined,
                 vy: b.vy !== undefined ? b.vy * canvas.height : undefined
@@ -511,16 +515,20 @@ export default function GameCanvas({
                 ...data.child1,
                 x: absoluteX1,
                 y: absoluteY1,
-                serverX: absoluteX1,
-                serverY: absoluteY1,
+                physicsX: absoluteX1,
+                physicsY: absoluteY1,
+                offsetX: 0,
+                offsetY: 0,
                 speed: data.child1.speed * canvas.height
               };
               const c2 = {
                 ...data.child2,
                 x: absoluteX2,
                 y: absoluteY2,
-                serverX: absoluteX2,
-                serverY: absoluteY2,
+                physicsX: absoluteX2,
+                physicsY: absoluteY2,
+                offsetX: 0,
+                offsetY: 0,
                 speed: data.child2.speed * canvas.height
               };
               state.enemies.push(c1, c2);
@@ -744,17 +752,31 @@ export default function GameCanvas({
                 if (localE) {
                   const absoluteX = syncE.x * canvas.width;
                   const absoluteY = syncE.y * canvas.height;
-                  // If coordinates are completely unset, or if they deviate by > 150 (snapping threshold), snap them.
-                  // Otherwise, smooth blend the target server coordinates to avoid sawtooth movement.
-                  if (localE.serverX === undefined || Math.hypot(localE.x - absoluteX, localE.y - absoluteY) > 150) {
-                    localE.x = absoluteX;
-                    localE.y = absoluteY;
-                    localE.serverX = absoluteX;
-                    localE.serverY = absoluteY;
-                  } else {
-                    localE.serverX = localE.serverX + (absoluteX - localE.serverX) * 0.3;
-                    localE.serverY = localE.serverY + (absoluteY - localE.serverY) * 0.3;
+                  
+                  if (localE.physicsX === undefined) {
+                    localE.physicsX = localE.x;
+                    localE.physicsY = localE.y;
+                    localE.offsetX = 0;
+                    localE.offsetY = 0;
                   }
+                  
+                  // Mismatch between visual position and host authoritative target
+                  const errorX = localE.x - absoluteX;
+                  const errorY = localE.y - absoluteY;
+                  
+                  if (Math.hypot(errorX, errorY) < 180) {
+                    localE.offsetX = errorX;
+                    localE.offsetY = errorY;
+                  } else {
+                    localE.offsetX = 0;
+                    localE.offsetY = 0;
+                  }
+                  
+                  // Snap simulated coordinates immediately to server authority
+                  localE.physicsX = absoluteX;
+                  localE.physicsY = absoluteY;
+                  localE.serverX = absoluteX; // maintain compatibility fallback
+                  localE.serverY = absoluteY;
                 }
               });
               data.bullets.forEach(syncB => {
@@ -762,15 +784,29 @@ export default function GameCanvas({
                 if (localB) {
                   const absoluteX = syncB.x * canvas.width;
                   const absoluteY = syncB.y * canvas.height;
-                  if (localB.serverX === undefined || Math.hypot(localB.x - absoluteX, localB.y - absoluteY) > 150) {
-                    localB.x = absoluteX;
-                    localB.y = absoluteY;
-                    localB.serverX = absoluteX;
-                    localB.serverY = absoluteY;
-                  } else {
-                    localB.serverX = localB.serverX + (absoluteX - localB.serverX) * 0.3;
-                    localB.serverY = localB.serverY + (absoluteY - localB.serverY) * 0.3;
+                  
+                  if (localB.physicsX === undefined) {
+                    localB.physicsX = localB.x;
+                    localB.physicsY = localB.y;
+                    localB.offsetX = 0;
+                    localB.offsetY = 0;
                   }
+                  
+                  const errorX = localB.x - absoluteX;
+                  const errorY = localB.y - absoluteY;
+                  
+                  if (Math.hypot(errorX, errorY) < 180) {
+                    localB.offsetX = errorX;
+                    localB.offsetY = errorY;
+                  } else {
+                    localB.offsetX = 0;
+                    localB.offsetY = 0;
+                  }
+                  
+                  localB.physicsX = absoluteX;
+                  localB.physicsY = absoluteY;
+                  localB.serverX = absoluteX;
+                  localB.serverY = absoluteY;
                 }
               });
             }
@@ -2317,55 +2353,42 @@ export default function GameCanvas({
       }
 
       const pat = enemy.movementPattern || 'straight';
-      const easeFactor = Math.min(1.0, 0.15 * dt);
       if (!isHost) {
-        if (enemy.serverY !== undefined) {
-          // Progress the server authoritative target coordinate forward by the same speed/skills logic
-          const dy = enemy.speed * baseSpeedMultiplier * multiplayerDifficulty * speedFactor * dt;
-          enemy.serverY += dy;
-          
-          if (speedFactor > 0) {
-            enemy.patternAge = (enemy.patternAge || 0) + 1 * dt;
-            
-            if (enemy.type === 'drone' && pat !== 'straight') {
-              enemy.serverX += Math.sin(enemy.patternAge * 0.04) * 0.65 * speedFactor * dt;
-            } else if (pat === 'sine') {
-              enemy.serverX += (enemy.dirMultiplier || 1) * Math.sin(enemy.serverY * 0.02) * 1.8 * speedFactor * dt;
-            } else if (pat === 'cosine') {
-              enemy.serverX += (enemy.dirMultiplier || 1) * Math.cos(enemy.serverY * 0.02) * 1.8 * speedFactor * dt;
-            } else if (pat === 'zigzag') {
-              const zigDir = Math.floor(enemy.patternAge / 55) % 2 === 0 ? 1 : -1;
-              enemy.serverX += (enemy.dirMultiplier || 1) * zigDir * 1.6 * speedFactor * dt;
-            } else if (pat === 'drift') {
-              enemy.serverX += (enemy.dirMultiplier || 1) * Math.sin(enemy.patternAge * 0.007) * 2.2 * speedFactor * dt;
-            }
-            
-            enemy.serverX = Math.max(50, Math.min(canvas.width - 50, enemy.serverX));
-          }
-
-          // Ease the visual coordinate toward the moving predicted target smoothly
-          enemy.x += (enemy.serverX - enemy.x) * easeFactor;
-          enemy.y += (enemy.serverY - enemy.y) * easeFactor;
-        } else {
-          // Fallback if sync packet hasn't arrived yet
-          enemy.y += enemy.speed * baseSpeedMultiplier * multiplayerDifficulty * speedFactor * dt;
-          if (speedFactor > 0) {
-            enemy.patternAge = (enemy.patternAge || 0) + 1 * dt;
-            if (enemy.type === 'drone' && pat !== 'straight') {
-              enemy.x += Math.sin(enemy.patternAge * 0.04) * 0.65 * speedFactor * dt;
-            } else if (pat === 'sine') {
-              enemy.x += (enemy.dirMultiplier || 1) * Math.sin(enemy.y * 0.02) * 1.8 * speedFactor * dt;
-            } else if (pat === 'cosine') {
-              enemy.x += (enemy.dirMultiplier || 1) * Math.cos(enemy.y * 0.02) * 1.8 * speedFactor * dt;
-            } else if (pat === 'zigzag') {
-              const zigDir = Math.floor(enemy.patternAge / 55) % 2 === 0 ? 1 : -1;
-              enemy.x += (enemy.dirMultiplier || 1) * zigDir * 1.6 * speedFactor * dt;
-            } else if (pat === 'drift') {
-              enemy.x += (enemy.dirMultiplier || 1) * Math.sin(enemy.patternAge * 0.007) * 2.2 * speedFactor * dt;
-            }
-            enemy.x = Math.max(50, Math.min(canvas.width - 50, enemy.x));
-          }
+        if (enemy.physicsY === undefined) {
+          enemy.physicsX = enemy.x;
+          enemy.physicsY = enemy.y;
+          enemy.offsetX = 0;
+          enemy.offsetY = 0;
         }
+
+        // Progress the physical coordinate forward using the local physics equations
+        enemy.physicsY += enemy.speed * baseSpeedMultiplier * multiplayerDifficulty * speedFactor * dt;
+        if (speedFactor > 0) {
+          enemy.patternAge = (enemy.patternAge || 0) + 1 * dt;
+          
+          if (enemy.type === 'drone' && pat !== 'straight') {
+            enemy.physicsX += Math.sin(enemy.patternAge * 0.04) * 0.65 * speedFactor * dt;
+          } else if (pat === 'sine') {
+            enemy.physicsX += (enemy.dirMultiplier || 1) * Math.sin(enemy.physicsY * 0.02) * 1.8 * speedFactor * dt;
+          } else if (pat === 'cosine') {
+            enemy.physicsX += (enemy.dirMultiplier || 1) * Math.cos(enemy.physicsY * 0.02) * 1.8 * speedFactor * dt;
+          } else if (pat === 'zigzag') {
+            const zigDir = Math.floor(enemy.patternAge / 55) % 2 === 0 ? 1 : -1;
+            enemy.physicsX += (enemy.dirMultiplier || 1) * zigDir * 1.6 * speedFactor * dt;
+          } else if (pat === 'drift') {
+            enemy.physicsX += (enemy.dirMultiplier || 1) * Math.sin(enemy.patternAge * 0.007) * 2.2 * speedFactor * dt;
+          }
+          
+          enemy.physicsX = Math.max(50, Math.min(canvas.width - 50, enemy.physicsX));
+        }
+
+        // Decay visual offsets smoothly to zero
+        if (enemy.offsetX !== undefined) enemy.offsetX *= Math.max(0, 1 - 0.18 * dt);
+        if (enemy.offsetY !== undefined) enemy.offsetY *= Math.max(0, 1 - 0.18 * dt);
+
+        // Visual coordinates = physics coordinates + visually blended error offset
+        enemy.x = enemy.physicsX + (enemy.offsetX || 0);
+        enemy.y = enemy.physicsY + (enemy.offsetY || 0);
       } else {
         // Host (or single player) authoritative physics
         enemy.y += enemy.speed * baseSpeedMultiplier * multiplayerDifficulty * speedFactor * dt;
@@ -2534,29 +2557,29 @@ export default function GameCanvas({
         bullet.vy = Math.sin(angle) * bullet.speed;
       }
 
-      const easeFactor = Math.min(1.0, 0.15 * dt);
       if (!isHost) {
-        if (bullet.serverY !== undefined) {
-          // Progress the server authoritative target coordinate forward by the same velocity and time-warp modifiers
-          if (bullet.vx !== undefined && bullet.vy !== undefined) {
-            bullet.serverX += bullet.vx * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor * dt;
-            bullet.serverY += bullet.vy * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor * dt;
-          } else {
-            bullet.serverY += bullet.speed * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor * dt;
-          }
-
-          // Ease the visual coordinate toward the moving predicted target smoothly
-          bullet.x += (bullet.serverX - bullet.x) * easeFactor;
-          bullet.y += (bullet.serverY - bullet.y) * easeFactor;
-        } else {
-          // Fallback if sync packet hasn't arrived yet
-          if (bullet.vx !== undefined && bullet.vy !== undefined) {
-            bullet.x += bullet.vx * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor * dt;
-            bullet.y += bullet.vy * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor * dt;
-          } else {
-            bullet.y += bullet.speed * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor * dt;
-          }
+        if (bullet.physicsY === undefined) {
+          bullet.physicsX = bullet.x;
+          bullet.physicsY = bullet.y;
+          bullet.offsetX = 0;
+          bullet.offsetY = 0;
         }
+
+        // Progress the physical coordinate forward using velocity equations
+        if (bullet.vx !== undefined && bullet.vy !== undefined) {
+          bullet.physicsX += bullet.vx * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor * dt;
+          bullet.physicsY += bullet.vy * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor * dt;
+        } else {
+          bullet.physicsY += bullet.speed * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor * dt;
+        }
+
+        // Decay visual offsets smoothly to zero
+        if (bullet.offsetX !== undefined) bullet.offsetX *= Math.max(0, 1 - 0.18 * dt);
+        if (bullet.offsetY !== undefined) bullet.offsetY *= Math.max(0, 1 - 0.18 * dt);
+
+        // Visual coordinates = physics coordinates + visually blended error offset
+        bullet.x = bullet.physicsX + (bullet.offsetX || 0);
+        bullet.y = bullet.physicsY + (bullet.offsetY || 0);
       } else {
         // Host authoritative physics
         if (bullet.vx !== undefined && bullet.vy !== undefined) {
