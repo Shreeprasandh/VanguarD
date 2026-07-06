@@ -4625,6 +4625,10 @@ export default function GameCanvas({
       ctx.save();
       ctx.translate(x, y);
 
+      // Scale ship size relative to a base canvas width of 1200px (ensuring uniform size across screens)
+      const shipScale = canvas.width / 1200;
+      ctx.scale(shipScale, shipScale);
+
       const getRgbFromHex = (hex) => {
         const cleanHex = hex.replace('#', '');
         const r = parseInt(cleanHex.substring(0, 2), 16);
@@ -4814,7 +4818,7 @@ export default function GameCanvas({
         let sy = canvas.height - 80;
         if (state.waveState === 'docking') {
           sy -= state.dockingShipYOffset;
-        } else if (state.wave === 1 && state.waveState === 'intro' && state.waveTransitionTimer > 60) {
+        } else if (state.waveState === 'intro' && state.waveTransitionTimer > 60) {
           const delay = p.isHost ? 0 : 40;
           const activeTimer = state.waveTransitionTimer - 60;
           const startY = canvas.height + 100;
@@ -4850,7 +4854,7 @@ export default function GameCanvas({
       let sy = canvas.height - 80;
       if (state.waveState === 'docking') {
         sy -= state.dockingShipYOffset;
-      } else if (state.wave === 1 && state.waveState === 'intro' && state.waveTransitionTimer > 60) {
+      } else if (state.waveState === 'intro' && state.waveTransitionTimer > 60) {
         const activeTimer = state.waveTransitionTimer - 60;
         const progress = activeTimer / 120;
         const startY = canvas.height + 100;

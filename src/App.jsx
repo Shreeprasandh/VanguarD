@@ -200,6 +200,7 @@ export default function App() {
 
             case 'GAME_STARTED': {
               setPlayers(data.players);
+              setGameStats({ score: 0, wave: 1 });
               if (data.maxPlayers) {
                 setMaxPlayers(data.maxPlayers);
               }
