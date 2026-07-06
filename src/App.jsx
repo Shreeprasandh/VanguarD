@@ -514,6 +514,7 @@ export default function App() {
             username={username}
             shipColor={shipColor}
             isMultiplayer={isMultiplayer}
+            maxPlayers={maxPlayers}
             roomCode={roomCode}
             players={players}
             socket={socketRef.current}

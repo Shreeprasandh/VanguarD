@@ -17,6 +17,7 @@ export default function GameCanvas({
   username,
   shipColor,
   isMultiplayer,
+  maxPlayers = 3,
   roomCode,
   players,
   socket,
@@ -156,18 +157,40 @@ export default function GameCanvas({
       const newWidth = canvas.width;
       const newHeight = canvas.height;
 
-      // Adjust scenery coordinates dynamically so they stretch/align to the new screen boundaries
-      if (oldWidth > 0 && oldHeight > 0 && stateRef.current.scenery && stateRef.current.scenery.length > 0) {
-        stateRef.current.scenery.forEach(item => {
-          item.y = (item.y / oldHeight) * newHeight;
-          const wasLeft = item.x < oldWidth / 2;
-          if (wasLeft) {
+      // Adjust scenery, enemies, and bullets coordinates dynamically so they stretch/align to the new screen boundaries
+      if (oldWidth > 0 && oldHeight > 0) {
+        if (stateRef.current.scenery && stateRef.current.scenery.length > 0) {
+          stateRef.current.scenery.forEach(item => {
+            item.y = (item.y / oldHeight) * newHeight;
+            const wasLeft = item.x < oldWidth / 2;
+            if (wasLeft) {
+              item.x = (item.x / oldWidth) * newWidth;
+            } else {
+              const distFromRight = oldWidth - item.x;
+              item.x = newWidth - (distFromRight / oldWidth) * newWidth;
+            }
+          });
+        }
+        if (stateRef.current.enemies && stateRef.current.enemies.length > 0) {
+          stateRef.current.enemies.forEach(item => {
             item.x = (item.x / oldWidth) * newWidth;
-          } else {
-            const distFromRight = oldWidth - item.x;
-            item.x = newWidth - (distFromRight / oldWidth) * newWidth;
-          }
-        });
+            item.y = (item.y / oldHeight) * newHeight;
+            if (item.serverX !== undefined) item.serverX = (item.serverX / oldWidth) * newWidth;
+            if (item.serverY !== undefined) item.serverY = (item.serverY / oldHeight) * newHeight;
+            item.speed = (item.speed / oldHeight) * newHeight;
+          });
+        }
+        if (stateRef.current.bullets && stateRef.current.bullets.length > 0) {
+          stateRef.current.bullets.forEach(item => {
+            item.x = (item.x / oldWidth) * newWidth;
+            item.y = (item.y / oldHeight) * newHeight;
+            if (item.serverX !== undefined) item.serverX = (item.serverX / oldWidth) * newWidth;
+            if (item.serverY !== undefined) item.serverY = (item.serverY / oldHeight) * newHeight;
+            item.speed = (item.speed / oldHeight) * newHeight;
+            if (item.vx !== undefined) item.vx = (item.vx / oldWidth) * newWidth;
+            if (item.vy !== undefined) item.vy = (item.vy / oldHeight) * newHeight;
+          });
+        }
       }
       
       // Initialize scenery if empty
@@ -456,10 +479,14 @@ export default function GameCanvas({
           case 'SPAWN_BULLET': {
             if (socket.id !== data.hostId) {
               const b = data.bullet;
+              const absoluteX = b.x * canvas.width;
+              const absoluteY = b.y * canvas.height;
               state.bullets.push({
                 ...b,
-                x: b.x * canvas.width,
-                y: b.y * canvas.height,
+                x: absoluteX,
+                y: absoluteY,
+                serverX: absoluteX,
+                serverY: absoluteY,
                 speed: b.speed * canvas.height,
                 vx: b.vx !== undefined ? b.vx * canvas.width : undefined,
                 vy: b.vy !== undefined ? b.vy * canvas.height : undefined
@@ -5918,6 +5945,7 @@ export default function GameCanvas({
         multiplier={hudState.multiplier}
         wave={hudState.wave}
         isMultiplayer={isMultiplayer}
+        maxPlayers={maxPlayers}
         teamPlayers={hudState.teammates}
         health={hudState.health}
         localPlayerId={socket?.id}

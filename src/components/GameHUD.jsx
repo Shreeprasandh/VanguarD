@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function GameHUD({ score, multiplier, wave, isMultiplayer, teamPlayers, health = 100, localPlayerId, localPlayerColor }) {
+export default function GameHUD({ score, multiplier, wave, isMultiplayer, teamPlayers, health = 100, localPlayerId, localPlayerColor, maxPlayers = 3 }) {
   // Filter out teammates and get local player color
   const teammates = isMultiplayer && teamPlayers ? teamPlayers.filter(p => p.socketId !== localPlayerId) : [];
   const localPlayer = isMultiplayer && teamPlayers ? teamPlayers.find(p => p.socketId === localPlayerId) : null;
@@ -48,8 +48,8 @@ export default function GameHUD({ score, multiplier, wave, isMultiplayer, teamPl
           {/* Vertical Health Bars container */}
           <div style={{ display: 'flex', flexDirection: 'row', gap: '0.6rem', alignItems: 'flex-end', marginTop: '1.6rem' }}>
             {isMultiplayer ? (
-              // Multiplayer: Render exactly 3 slots to prevent alignment shifts
-              [0, 1, 2].map((index) => {
+              // Multiplayer: Render exactly maxPlayers slots to prevent alignment shifts
+              Array.from({ length: maxPlayers === 2 ? 2 : 3 }, (_, i) => i).map((index) => {
                 const player = sortedPlayers[index];
                 if (player) {
                   const isSelf = player.socketId === localPlayerId;
