@@ -292,6 +292,16 @@ wss.on('connection', (ws) => {
 
           const chosenColor = data.color; // 'red', 'blue', 'green'
 
+          // Check if another player has already selected this color
+          const colorTaken = room.players.some(p => p.socketId !== socketId && p.color === chosenColor);
+          if (colorTaken) {
+            ws.send(JSON.stringify({
+              type: 'COLOR_ERROR',
+              message: `Color ${chosenColor.toUpperCase()} is already selected by a teammate!`
+            }));
+            break;
+          }
+
           const roomPlayer = room.players.find(p => p.socketId === socketId);
           if (roomPlayer) {
             roomPlayer.color = chosenColor;

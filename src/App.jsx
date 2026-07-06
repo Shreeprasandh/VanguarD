@@ -68,6 +68,17 @@ export default function App() {
     return () => window.removeEventListener('resize', checkDevice);
   }, []);
 
+  // Sync local ship color continuously when the players array updates
+  useEffect(() => {
+    if (isMultiplayer && players && players.length > 0) {
+      const activeSelf = players.find(p => p.socketId === localSocketId || p.socketId === socketRef.current?.id);
+      if (activeSelf && activeSelf.color && activeSelf.color !== shipColor) {
+        setShipColor(activeSelf.color);
+        localStorage.setItem('cybertype_color', activeSelf.color);
+      }
+    }
+  }, [players, localSocketId, isMultiplayer, shipColor]);
+
   // Manage background menu/lobby theme audio lifecycle
   useEffect(() => {
     GameAudio.init();

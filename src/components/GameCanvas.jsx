@@ -1375,6 +1375,12 @@ export default function GameCanvas({
       // We have an active target
       const enemy = state.enemies.find(e => e.id === state.activeWordId);
       if (enemy) {
+        // Double check color matching to prevent color hijacking
+        if (isMultiplayer && enemy.color && enemy.color !== shipColor && enemy.type !== 'meteor') {
+          state.activeWordId = null;
+          tryAcquireNewTarget(char);
+          return;
+        }
         if (enemy.isInvulnerable) {
           GameAudio.play('shield_hit', getPan(enemy.x));
           return; // Linked target is invulnerable!
@@ -1418,9 +1424,9 @@ export default function GameCanvas({
     const state = stateRef.current;
     
     // Find enemies whose current letter matches the typed character
-    // In co-op, we can ONLY target enemies that match our ship color!
+    // In co-op, we can ONLY target enemies that match our ship color (meteors are shared!)
     const eligibleEnemies = state.enemies.filter(e => {
-      const matchesColor = !isMultiplayer || e.color === shipColor;
+      const matchesColor = !isMultiplayer || e.color === shipColor || e.type === 'meteor';
       const startsWithChar = e.word[0].toLowerCase() === char;
       return matchesColor && startsWithChar && e.targetIndex === 0 && !e.isInvulnerable;
     });
@@ -1428,7 +1434,7 @@ export default function GameCanvas({
     if (eligibleEnemies.length === 0) {
       // Check if they tried to target a linked invulnerable enemy
       const invulnerableMatch = state.enemies.find(e => {
-        const matchesColor = !isMultiplayer || e.color === shipColor;
+        const matchesColor = !isMultiplayer || e.color === shipColor || e.type === 'meteor';
         const startsWithChar = e.word[0].toLowerCase() === char;
         return matchesColor && startsWithChar && e.isInvulnerable;
       });
