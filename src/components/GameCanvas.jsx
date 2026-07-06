@@ -539,15 +539,23 @@ export default function GameCanvas({
               data.enemies.forEach(syncE => {
                 const localE = state.enemies.find(e => e.id === syncE.id);
                 if (localE) {
-                  localE.x = syncE.x;
-                  localE.y = syncE.y;
+                  if (localE.serverX === undefined || Math.hypot(localE.x - syncE.x, localE.y - syncE.y) > 80) {
+                    localE.x = syncE.x;
+                    localE.y = syncE.y;
+                  }
+                  localE.serverX = syncE.x;
+                  localE.serverY = syncE.y;
                 }
               });
               data.bullets.forEach(syncB => {
                 const localB = state.bullets.find(b => b.id === syncB.id);
                 if (localB) {
-                  localB.x = syncB.x;
-                  localB.y = syncB.y;
+                  if (localB.serverX === undefined || Math.hypot(localB.x - syncB.x, localB.y - syncB.y) > 80) {
+                    localB.x = syncB.x;
+                    localB.y = syncB.y;
+                  }
+                  localB.serverX = syncB.x;
+                  localB.serverY = syncB.y;
                 }
               });
             }
@@ -1899,6 +1907,12 @@ export default function GameCanvas({
         enemy.x += Math.sin(enemy.patternAge * 0.04) * 0.65 * speedFactor;
       }
 
+      // Easing correction for multiplayer guests to prevent flickering/jittering
+      if (!isHost && enemy.serverY !== undefined) {
+        enemy.x += (enemy.serverX - enemy.x) * 0.12;
+        enemy.y += (enemy.serverY - enemy.y) * 0.12;
+      }
+
       // Drone subtle green trailing particles
       if (enemy.type === 'drone' && speedFactor > 0 && Math.random() < 0.08) {
         state.particles.push({
@@ -2040,6 +2054,12 @@ export default function GameCanvas({
         bullet.y += bullet.vy * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor;
       } else {
         bullet.y += bullet.speed * baseSpeedMultiplier * multiplayerDifficulty * bulletFactor * speedFactor;
+      }
+
+      // Easing correction for multiplayer guests to prevent flickering/jittering
+      if (!isHost && bullet.serverY !== undefined) {
+        bullet.x += (bullet.serverX - bullet.x) * 0.12;
+        bullet.y += (bullet.serverY - bullet.y) * 0.12;
       }
 
       // Hit bottom check
