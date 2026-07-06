@@ -10,52 +10,6 @@ export default function MenuBackground({ shipColor = 'blue' }) {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
 
-    const handleResize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    };
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    document.addEventListener('fullscreenchange', handleResize);
-    document.addEventListener('webkitfullscreenchange', handleResize);
-
-    const trailParticles = [];
-
-    const handleMouseMove = (e) => {
-      mouseRef.current.x = e.clientX;
-      mouseRef.current.y = e.clientY;
-      mouseRef.current.active = true;
-      
-      // Save trail history
-      trailHistory.current.push({
-        x: e.clientX,
-        y: e.clientY
-      });
-      if (trailHistory.current.length > 20) {
-        trailHistory.current.shift();
-      }
-
-      // Spawn trail spark particles
-      for (let p = 0; p < 2; p++) {
-        trailParticles.push({
-          x: e.clientX,
-          y: e.clientY,
-          vx: (Math.random() - 0.5) * 1.4,
-          vy: (Math.random() - 0.5) * 1.4,
-          size: 1.0 + Math.random() * 2.5,
-          life: 35,
-          maxLife: 35
-        });
-      }
-    };
-
-    const handleMouseLeave = () => {
-      mouseRef.current.active = false;
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseleave', handleMouseLeave);
-
     const nodes = [];
     const nodeCount = 130;
     for (let i = 0; i < nodeCount; i++) {
@@ -189,6 +143,70 @@ export default function MenuBackground({ shipColor = 'blue' }) {
         opacity: 0.09
       }
     ];
+
+    const handleResize = () => {
+      const oldWidth = canvas.width;
+      const oldHeight = canvas.height;
+
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+
+      const newWidth = canvas.width;
+      const newHeight = canvas.height;
+
+      if (oldWidth > 0 && oldHeight > 0) {
+        nodes.forEach(node => {
+          node.x = (node.x / oldWidth) * newWidth;
+          node.y = (node.y / oldHeight) * newHeight;
+        });
+
+        bgObjects.forEach(obj => {
+          obj.x = (obj.x / oldWidth) * newWidth;
+          obj.y = (obj.y / oldHeight) * newHeight;
+        });
+      }
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    document.addEventListener('fullscreenchange', handleResize);
+    document.addEventListener('webkitfullscreenchange', handleResize);
+
+    const trailParticles = [];
+
+    const handleMouseMove = (e) => {
+      mouseRef.current.x = e.clientX;
+      mouseRef.current.y = e.clientY;
+      mouseRef.current.active = true;
+      
+      // Save trail history
+      trailHistory.current.push({
+        x: e.clientX,
+        y: e.clientY
+      });
+      if (trailHistory.current.length > 20) {
+        trailHistory.current.shift();
+      }
+
+      // Spawn trail spark particles
+      for (let p = 0; p < 2; p++) {
+        trailParticles.push({
+          x: e.clientX,
+          y: e.clientY,
+          vx: (Math.random() - 0.5) * 1.4,
+          vy: (Math.random() - 0.5) * 1.4,
+          size: 1.0 + Math.random() * 2.5,
+          life: 35,
+          maxLife: 35
+        });
+      }
+    };
+
+    const handleMouseLeave = () => {
+      mouseRef.current.active = false;
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseleave', handleMouseLeave);
 
     // Grid warping calculations
     const getWarpedPoint = (x, y, mx, my, mActive) => {

@@ -178,6 +178,8 @@ export default function GameCanvas({
     
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
+    document.addEventListener('fullscreenchange', resizeCanvas);
+    document.addEventListener('webkitfullscreenchange', resizeCanvas);
 
     // Global window keydown listener to ensure keyboard input is captured reliably
     const handleGlobalKeyDown = (e) => {
@@ -207,6 +209,8 @@ export default function GameCanvas({
 
     return () => {
       window.removeEventListener('resize', resizeCanvas);
+      document.removeEventListener('fullscreenchange', resizeCanvas);
+      document.removeEventListener('webkitfullscreenchange', resizeCanvas);
       window.removeEventListener('keydown', handleGlobalKeyDown);
       cancelAnimationFrame(animationFrameId);
       GameAudio.stopMusic();
