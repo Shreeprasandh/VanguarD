@@ -183,6 +183,7 @@ export default function GameCanvas({
 
       // Animate leaving ships for players who are no longer in the list
       const currentSocketIds = players.map(p => p.socketId);
+      let playerLeft = false;
       if (state.teammates && state.teammates.length > 0) {
         state.teammates.forEach(mate => {
           if (!currentSocketIds.includes(mate.socketId)) {
@@ -197,8 +198,39 @@ export default function GameCanvas({
               opacity: 1.0
             });
             delete state.playerPositions[mate.socketId];
+            playerLeft = true;
           }
         });
+      }
+
+      if (playerLeft) {
+        GameAudio.play('warning');
+        state.colorSpawnBag = [];
+        
+        const remainingColors = players.map(p => p.color).filter(Boolean);
+        if (remainingColors.length > 0) {
+          state.enemies.forEach(enemy => {
+            if (!remainingColors.includes(enemy.color)) {
+              const newColor = remainingColors[Math.floor(Math.random() * remainingColors.length)];
+              enemy.color = newColor;
+              if (enemy.wordQueue && enemy.wordQueue.length > 0) {
+                enemy.wordQueue.forEach(qItem => {
+                  if (qItem && typeof qItem === 'object') {
+                    qItem.color = newColor;
+                  }
+                });
+              }
+            }
+          });
+
+          if (state.bossObj && state.bossObj.words) {
+            state.bossObj.words.forEach(w => {
+              if (!remainingColors.includes(w.color)) {
+                w.color = remainingColors[Math.floor(Math.random() * remainingColors.length)];
+              }
+            });
+          }
+        }
       }
 
       // Filter out local player and store others as teammates
@@ -290,7 +322,10 @@ export default function GameCanvas({
               if (data.wordFinished) {
                 if (targetEnemy.wordQueue && targetEnemy.wordQueue.length > 0) {
                   const nextWord = targetEnemy.wordQueue.shift();
-                  targetEnemy.word = nextWord;
+                  targetEnemy.word = typeof nextWord === 'string' ? nextWord : nextWord.word;
+                  if (nextWord && typeof nextWord === 'object' && nextWord.color) {
+                    targetEnemy.color = nextWord.color;
+                  }
                   targetEnemy.targetIndex = 0;
                   createExplosion(data.x, data.y, getColorHex(mate.color), 10);
                   GameAudio.play('explosionSmall', getPan(data.x));
@@ -1249,7 +1284,10 @@ export default function GameCanvas({
       
       if (enemy.wordQueue && enemy.wordQueue.length > 0) {
         const nextWord = enemy.wordQueue.shift();
-        enemy.word = nextWord;
+        enemy.word = typeof nextWord === 'string' ? nextWord : nextWord.word;
+        if (nextWord && typeof nextWord === 'object' && nextWord.color) {
+          enemy.color = nextWord.color;
+        }
         enemy.targetIndex = 0;
         state.activeWordId = null;
         createExplosion(enemy.x, enemy.y, getColorHex(enemy.color), 10);
@@ -2084,11 +2122,19 @@ export default function GameCanvas({
     const word = getWordForEnemy('anomaly', state.wave, state.usedWords);
     const enemyId = 'anomaly';
     
+    let anomalyColor = 'purple';
+    if (isMultiplayer && players && players.length > 0) {
+      const colors = players.map(p => p.color).filter(Boolean);
+      if (colors.length > 0) {
+        anomalyColor = colors[Math.floor(Math.random() * colors.length)];
+      }
+    }
+
     const anomalyEnemy = {
       id: enemyId,
       word,
       wordQueue: [],
-      color: 'purple',
+      color: anomalyColor,
       x: canvas.width / 2,
       y: 120, // hover at upper height
       speed: 0.05,
@@ -2208,7 +2254,19 @@ export default function GameCanvas({
         // Generals have 2 to 3 words total (so 1 to 2 extra in queue)
         const totalWords = Math.random() < 0.5 ? 2 : 3;
         for (let w = 0; w < totalWords - 1; w++) {
-          wordQueue.push(getWordForEnemy('cruiser', state.wave, state.usedWords));
+          let wColor = color;
+          if (isMultiplayer && players && players.length > 0) {
+            const colors = players.map(p => p.color).filter(Boolean);
+            if (colors.length > 0) {
+              wColor = colors[Math.floor(Math.random() * colors.length)];
+            }
+          } else {
+            wColor = 'gold';
+          }
+          wordQueue.push({
+            word: getWordForEnemy('cruiser', state.wave, state.usedWords),
+            color: wColor
+          });
         }
       }
 
@@ -2456,6 +2514,13 @@ export default function GameCanvas({
     } else {
       miniBossName = 'ELITE OVERSEER';
       miniBossColor = 'purple';
+    }
+
+    if (isMultiplayer && players && players.length > 0) {
+      const colors = players.map(p => p.color).filter(Boolean);
+      if (colors.length > 0) {
+        miniBossColor = colors[Math.floor(Math.random() * colors.length)];
+      }
     }
 
     // Mini-boss contains a single large target word representing its specific design
@@ -2839,7 +2904,22 @@ export default function GameCanvas({
         boss.words[shieldIndex].word = getWordForEnemy('boss', state.wave, state.usedWords);
         boss.words[shieldIndex].targetIndex = 0;
         boss.words[shieldIndex].active = true;
+        if (isMultiplayer && players && players.length > 0) {
+          const colors = players.map(p => p.color).filter(Boolean);
+          if (colors.length > 0) {
+            boss.words[shieldIndex].color = colors[Math.floor(Math.random() * colors.length)];
+          }
+        }
         loadBossWordsAsEnemies(boss.words);
+        
+        if (isMultiplayer && socket) {
+          socket.send(JSON.stringify({
+            type: 'SYNC_BOSS_PHASE',
+            phase: boss.phase,
+            bossWords: boss.words,
+            hostId: socket.id
+          }));
+        }
         return;
       }
 

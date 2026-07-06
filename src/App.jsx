@@ -626,24 +626,29 @@ export default function App() {
       {showServerWakeup && !socketConnected && (
         <div className="wakeup-overlay">
           <div className="wakeup-modal">
+            {/* Futuristic Corner Brackets */}
+            <div style={{ position: 'absolute', top: '10px', left: '10px', width: '15px', height: '15px', borderTop: '2px solid rgba(255, 255, 255, 0.15)', borderLeft: '2px solid rgba(255, 255, 255, 0.15)' }} />
+            <div style={{ position: 'absolute', top: '10px', right: '10px', width: '15px', height: '15px', borderTop: '2px solid rgba(255, 255, 255, 0.15)', borderRight: '2px solid rgba(255, 255, 255, 0.15)' }} />
+            <div style={{ position: 'absolute', bottom: '10px', left: '10px', width: '15px', height: '15px', borderBottom: '2px solid rgba(255, 255, 255, 0.15)', borderLeft: '2px solid rgba(255, 255, 255, 0.15)' }} />
+            <div style={{ position: 'absolute', bottom: '10px', right: '10px', width: '15px', height: '15px', borderBottom: '2px solid rgba(255, 255, 255, 0.15)', borderRight: '2px solid rgba(255, 255, 255, 0.15)' }} />
+
             <div className="wakeup-header">
-              <span className="wakeup-glitch-text pulse-slow">[ SIGNAL INTERRUPT - WAKING CORE ]</span>
+              <span className="wakeup-glitch-text pulse-slow">SIGNAL INTERRUPT</span>
             </div>
             <div className="wakeup-progress-container">
               <div className="wakeup-spinner" />
               <div className="wakeup-countdown-box">
                 <span className="wakeup-countdown-num">{serverWakeupCountdown}</span>
-                <span className="wakeup-countdown-sec">sec</span>
               </div>
             </div>
-            <div className="wakeup-title">ESTABLISHING HYPER-SPACE LINK</div>
+            <div className="wakeup-title">ESTABLISHING CONNECTION</div>
             <p className="wakeup-text">
-              Our remote multiplayer server runs on a smart sleep cycle to conserve energy. 
-              Waking up the server cores and establishing client sync. Please stand by...
+              The multiplayer service is currently waking up to establish a sync link. 
+              This process can take up to a minute. Thank you for your patience.
             </p>
             <div className="wakeup-footer">
               <div className="wakeup-signal-dot pulse-fast" />
-              <span className="wakeup-status-label">INITIALIZING NEURAL LINK...</span>
+              <span className="wakeup-status-label">Reconnecting...</span>
             </div>
           </div>
         </div>

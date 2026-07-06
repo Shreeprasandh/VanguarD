@@ -767,118 +767,117 @@ body::-webkit-scrollbar,
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(10, 10, 15, 0.85);
-  backdrop-filter: blur(12px);
+  background: rgba(2, 2, 4, 0.85);
+  backdrop-filter: blur(8px);
   z-index: 10000;
   display: flex;
   justify-content: center;
   align-items: center;
-  font-family: 'Orbitron', 'Consolas', monospace;
-  color: #fff;
+  font-family: var(--font-body);
+  color: var(--text-primary);
 }
 
 .wakeup-modal {
-  background: rgba(18, 18, 29, 0.95);
-  border: 1px solid var(--neon-blue);
-  box-shadow: 0 0 25px rgba(51, 204, 255, 0.35);
-  border-radius: 12px;
-  width: 90%;
-  max-width: 520px;
-  padding: 2.5rem;
-  text-align: center;
   position: relative;
+  width: 90%;
+  max-width: 430px;
+  background: rgba(5, 5, 8, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 2.5rem;
+  border-radius: 4px;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.95);
+  text-align: center;
   overflow: hidden;
-  animation: uiFadeIn 0.5s ease-out;
+  animation: fadeIn 0.4s ease-out;
 }
 
 .wakeup-header {
-  margin-bottom: 2rem;
-  border-bottom: 1px dashed rgba(51, 204, 255, 0.2);
-  padding-bottom: 1rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 0.8rem;
 }
 
 .wakeup-glitch-text {
-  color: var(--neon-blue);
-  font-size: 1.15rem;
+  font-family: var(--font-body);
+  font-size: 1.1rem;
   font-weight: 700;
-  letter-spacing: 2px;
-  text-shadow: 0 0 8px rgba(51, 204, 255, 0.6);
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: #ffffff;
 }
 
 .wakeup-progress-container {
+  position: relative;
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 2rem;
-  margin: 2.5rem 0;
-  position: relative;
+  margin: 1.8rem 0;
+  height: 48px;
 }
 
 .wakeup-spinner {
-  width: 72px;
-  height: 72px;
-  border: 3px solid rgba(51, 204, 255, 0.15);
-  border-top-color: var(--neon-blue);
+  width: 48px;
+  height: 48px;
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  border-top-color: rgba(255, 255, 255, 0.6);
   border-radius: 50%;
-  animation: spin 1.2s linear infinite;
-  box-shadow: 0 0 15px rgba(51, 204, 255, 0.1);
+  animation: spin 1s linear infinite;
+  position: absolute;
 }
 
 .wakeup-countdown-box {
   display: flex;
-  flex-direction: column;
   align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  z-index: 1;
 }
 
 .wakeup-countdown-num {
-  font-size: 2.8rem;
-  font-weight: 700;
-  color: var(--neon-green);
-  text-shadow: 0 0 12px rgba(57, 255, 20, 0.5);
-  line-height: 1;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text-primary);
 }
 
 .wakeup-countdown-sec {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  margin-top: 0.2rem;
+  display: none;
 }
 
 .wakeup-title {
   color: var(--text-primary);
-  font-size: 0.95rem;
-  font-weight: 700;
-  letter-spacing: 3px;
-  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 2px;
+  margin-bottom: 0.6rem;
   text-transform: uppercase;
 }
 
 .wakeup-text {
   color: var(--text-secondary);
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   line-height: 1.6;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
+  font-weight: 300;
 }
 
 .wakeup-footer {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.6rem;
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 6px;
-  padding: 0.6rem;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  margin-top: 1.2rem;
 }
 
 .wakeup-signal-dot {
-  width: 8px;
-  height: 8px;
-  background-color: var(--neon-blue);
+  width: 6px;
+  height: 6px;
+  background-color: var(--text-secondary);
   border-radius: 50%;
-  box-shadow: 0 0 8px var(--neon-blue);
+  opacity: 0.6;
 }
 
 .wakeup-status-label {
@@ -891,4 +890,22 @@ body::-webkit-scrollbar,
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 0.4; }
+}
+
+@keyframes pulse-fast {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.pulse-slow {
+  animation: pulse-slow 3s infinite ease-in-out;
+}
+
+.pulse-fast {
+  animation: pulse-fast 1.5s infinite ease-in-out;
 }
