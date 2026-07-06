@@ -267,7 +267,9 @@ export default function GameCanvas({
           isHost: p.isHost,
           score: p.score || 0,
           level: p.level || 1,
-          health: existingMate ? existingMate.health : (p.health !== undefined ? p.health : 100)
+          health: existingMate ? existingMate.health : (p.health !== undefined ? p.health : 100),
+          isReviving: existingMate ? existingMate.isReviving : false,
+          reviveTimeRemaining: existingMate ? existingMate.reviveTimeRemaining : 0
         };
       });
       state.teammates = mates;
@@ -468,6 +470,11 @@ export default function GameCanvas({
                 state.flashFrame = 6;
                 GameAudio.play('explosionPlayer');
               }
+              setHudState(prev => ({ 
+                ...prev, 
+                health: state.health,
+                teammates: [...state.teammates]
+              }));
             }
             break;
           }
@@ -478,6 +485,11 @@ export default function GameCanvas({
               mate.health = 0;
               mate.isReviving = true;
               mate.reviveTimeRemaining = data.reviveTime * 60; // 15 * 60 = 900 frames
+              setHudState(prev => ({ 
+                ...prev, 
+                health: state.health,
+                teammates: [...state.teammates]
+              }));
             }
             break;
           }
@@ -492,6 +504,11 @@ export default function GameCanvas({
               const mx = state.playerPositions[mate.socketId] || getShipTargetX(mate.socketId, window.innerWidth);
               createExplosion(mx, window.innerHeight - 80, '#22c55e', 14);
               GameAudio.play('shield_activate');
+              setHudState(prev => ({ 
+                ...prev, 
+                health: state.health,
+                teammates: [...state.teammates]
+              }));
             }
             break;
           }
@@ -890,6 +907,13 @@ export default function GameCanvas({
       case 'nano_repair':
         state.health = Math.min(100, state.health + 15);
         setHudState(prev => ({ ...prev, health: state.health }));
+        if (isMultiplayer && socket) {
+          socket.send(JSON.stringify({
+            type: 'PLAYER_HIT',
+            playerId: socket.id,
+            health: state.health
+          }));
+        }
         break;
 
       case 'singularity_pin': {
@@ -1482,6 +1506,13 @@ export default function GameCanvas({
       if (state.regenHudTimer >= 15) {
         state.regenHudTimer = 0;
         setHudState(prev => ({ ...prev, health: Math.round(state.health) }));
+        if (isMultiplayer && socket) {
+          socket.send(JSON.stringify({
+            type: 'PLAYER_HIT',
+            playerId: socket.id,
+            health: state.health
+          }));
+        }
       }
     }
 
@@ -2007,9 +2038,24 @@ export default function GameCanvas({
           // Progress the server authoritative target coordinate forward by the same speed/skills logic
           const dy = enemy.speed * baseSpeedMultiplier * multiplayerDifficulty * speedFactor;
           enemy.serverY += dy;
-          if (enemy.type === 'drone' && pat !== 'straight' && speedFactor > 0) {
+          
+          if (speedFactor > 0) {
             enemy.patternAge = (enemy.patternAge || 0) + 1;
-            enemy.serverX += Math.sin(enemy.patternAge * 0.04) * 0.65 * speedFactor;
+            
+            if (enemy.type === 'drone' && pat !== 'straight') {
+              enemy.serverX += Math.sin(enemy.patternAge * 0.04) * 0.65 * speedFactor;
+            } else if (pat === 'sine') {
+              enemy.serverX += (enemy.dirMultiplier || 1) * Math.sin(enemy.serverY * 0.02) * 1.8 * speedFactor;
+            } else if (pat === 'cosine') {
+              enemy.serverX += (enemy.dirMultiplier || 1) * Math.cos(enemy.serverY * 0.02) * 1.8 * speedFactor;
+            } else if (pat === 'zigzag') {
+              const zigDir = Math.floor(enemy.patternAge / 55) % 2 === 0 ? 1 : -1;
+              enemy.serverX += (enemy.dirMultiplier || 1) * zigDir * 1.6 * speedFactor;
+            } else if (pat === 'drift') {
+              enemy.serverX += (enemy.dirMultiplier || 1) * Math.sin(enemy.patternAge * 0.007) * 2.2 * speedFactor;
+            }
+            
+            enemy.serverX = Math.max(50, Math.min(canvas.width - 50, enemy.serverX));
           }
 
           // Ease the visual coordinate toward the moving predicted target smoothly
@@ -2018,17 +2064,41 @@ export default function GameCanvas({
         } else {
           // Fallback if sync packet hasn't arrived yet
           enemy.y += enemy.speed * baseSpeedMultiplier * multiplayerDifficulty * speedFactor;
-          if (enemy.type === 'drone' && pat !== 'straight' && speedFactor > 0) {
+          if (speedFactor > 0) {
             enemy.patternAge = (enemy.patternAge || 0) + 1;
-            enemy.x += Math.sin(enemy.patternAge * 0.04) * 0.65 * speedFactor;
+            if (enemy.type === 'drone' && pat !== 'straight') {
+              enemy.x += Math.sin(enemy.patternAge * 0.04) * 0.65 * speedFactor;
+            } else if (pat === 'sine') {
+              enemy.x += (enemy.dirMultiplier || 1) * Math.sin(enemy.y * 0.02) * 1.8 * speedFactor;
+            } else if (pat === 'cosine') {
+              enemy.x += (enemy.dirMultiplier || 1) * Math.cos(enemy.y * 0.02) * 1.8 * speedFactor;
+            } else if (pat === 'zigzag') {
+              const zigDir = Math.floor(enemy.patternAge / 55) % 2 === 0 ? 1 : -1;
+              enemy.x += (enemy.dirMultiplier || 1) * zigDir * 1.6 * speedFactor;
+            } else if (pat === 'drift') {
+              enemy.x += (enemy.dirMultiplier || 1) * Math.sin(enemy.patternAge * 0.007) * 2.2 * speedFactor;
+            }
+            enemy.x = Math.max(50, Math.min(canvas.width - 50, enemy.x));
           }
         }
       } else {
         // Host (or single player) authoritative physics
         enemy.y += enemy.speed * baseSpeedMultiplier * multiplayerDifficulty * speedFactor;
-        if (enemy.type === 'drone' && pat !== 'straight' && speedFactor > 0) {
+        if (speedFactor > 0) {
           enemy.patternAge = (enemy.patternAge || 0) + 1;
-          enemy.x += Math.sin(enemy.patternAge * 0.04) * 0.65 * speedFactor;
+          if (enemy.type === 'drone' && pat !== 'straight') {
+            enemy.x += Math.sin(enemy.patternAge * 0.04) * 0.65 * speedFactor;
+          } else if (pat === 'sine') {
+            enemy.x += (enemy.dirMultiplier || 1) * Math.sin(enemy.y * 0.02) * 1.8 * speedFactor;
+          } else if (pat === 'cosine') {
+            enemy.x += (enemy.dirMultiplier || 1) * Math.cos(enemy.y * 0.02) * 1.8 * speedFactor;
+          } else if (pat === 'zigzag') {
+            const zigDir = Math.floor(enemy.patternAge / 55) % 2 === 0 ? 1 : -1;
+            enemy.x += (enemy.dirMultiplier || 1) * zigDir * 1.6 * speedFactor;
+          } else if (pat === 'drift') {
+            enemy.x += (enemy.dirMultiplier || 1) * Math.sin(enemy.patternAge * 0.007) * 2.2 * speedFactor;
+          }
+          enemy.x = Math.max(50, Math.min(canvas.width - 50, enemy.x));
         }
       }
 
