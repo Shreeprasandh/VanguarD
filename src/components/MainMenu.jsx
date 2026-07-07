@@ -117,22 +117,31 @@ export default function MainMenu({
           width: 100%;
         }
 
+        .minimal-btn-wrapper {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+        }
+
         .menu-btn-pointer {
           position: absolute;
-          left: calc(50% - 90px);
+          right: 100%;
+          margin-right: 12px;
+          top: 50%;
+          transform: translateY(-50%) translateX(-10px);
           width: 14px;
           height: 14px;
           display: flex;
           align-items: center;
           justify-content: center;
           opacity: 0;
-          transform: translateX(-10px);
           transition: all 0.25s cubic-bezier(0.19, 1, 0.22, 1);
         }
 
         .menu-btn-pointer.active {
           opacity: 1;
-          transform: translateX(0);
+          transform: translateY(-50%) translateX(0);
         }
 
         .minimal-text-btn {
@@ -349,66 +358,76 @@ export default function MainMenu({
               }}
             >
               <div className="menu-item-row">
-                {renderPointer('solo')}
-                <button 
-                  className="minimal-text-btn"
-                  onMouseEnter={() => setHoveredBtn('solo')}
-                  onMouseLeave={() => setHoveredBtn(null)}
-                  onClick={() => { handleButtonClick(); onStartSolo(); }}
-                >
-                  Solo
-                </button>
+                <div className="minimal-btn-wrapper">
+                  {renderPointer('solo')}
+                  <button 
+                    className="minimal-text-btn"
+                    onMouseEnter={() => setHoveredBtn('solo')}
+                    onMouseLeave={() => setHoveredBtn(null)}
+                    onClick={() => { handleButtonClick(); onStartSolo(); }}
+                  >
+                    Solo
+                  </button>
+                </div>
               </div>
               
               <div className="menu-item-row">
-                {renderPointer('multi')}
-                <button 
-                  className="minimal-text-btn"
-                  onMouseEnter={() => setHoveredBtn('multi')}
-                  onMouseLeave={() => setHoveredBtn(null)}
-                  onClick={() => { handleButtonClick(); setShowTeamOptions(true); }}
-                >
-                  Multiplayer
-                </button>
+                <div className="minimal-btn-wrapper">
+                  {renderPointer('multi')}
+                  <button 
+                    className="minimal-text-btn"
+                    onMouseEnter={() => setHoveredBtn('multi')}
+                    onMouseLeave={() => setHoveredBtn(null)}
+                    onClick={() => { handleButtonClick(); setShowTeamOptions(true); }}
+                  >
+                    Multiplayer
+                  </button>
+                </div>
               </div>
 
               <div className="menu-item-row" style={{ marginTop: '0.5rem' }}>
-                {renderPointer('leader')}
-                <button 
-                  className="minimal-text-btn"
-                  style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.35)', letterSpacing: '3px' }}
-                  onMouseEnter={() => setHoveredBtn('leader')}
-                  onMouseLeave={() => setHoveredBtn(null)}
-                  onClick={() => { handleButtonClick(); onOpenLeaderboard(); }}
-                >
-                  Leaderboard
-                </button>
+                <div className="minimal-btn-wrapper">
+                  {renderPointer('leader')}
+                  <button 
+                    className="minimal-text-btn"
+                    style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.35)', letterSpacing: '3px' }}
+                    onMouseEnter={() => setHoveredBtn('leader')}
+                    onMouseLeave={() => setHoveredBtn(null)}
+                    onClick={() => { handleButtonClick(); onOpenLeaderboard(); }}
+                  >
+                    Leaderboard
+                  </button>
+                </div>
               </div>
             </div>
           ) : (
             <div style={{ width: '100%', display: 'flex', flexDirection: 'column', animation: 'fadeIn 0.3s ease' }}>
               <div className="menu-item-row">
-                {renderPointer('create_2p')}
-                <button 
-                  className="minimal-text-btn"
-                  onMouseEnter={() => setHoveredBtn('create_2p')}
-                  onMouseLeave={() => setHoveredBtn(null)}
-                  onClick={() => { handleButtonClick(); onCreateRoom(2); }}
-                >
-                  Create 2P Room
-                </button>
+                <div className="minimal-btn-wrapper">
+                  {renderPointer('create_2p')}
+                  <button 
+                    className="minimal-text-btn"
+                    onMouseEnter={() => setHoveredBtn('create_2p')}
+                    onMouseLeave={() => setHoveredBtn(null)}
+                    onClick={() => { handleButtonClick(); onCreateRoom(2); }}
+                  >
+                    Create 2P Room
+                  </button>
+                </div>
               </div>
 
               <div className="menu-item-row" style={{ marginTop: '0.5rem' }}>
-                {renderPointer('create_3p')}
-                <button 
-                  className="minimal-text-btn"
-                  onMouseEnter={() => setHoveredBtn('create_3p')}
-                  onMouseLeave={() => setHoveredBtn(null)}
-                  onClick={() => { handleButtonClick(); onCreateRoom(3); }}
-                >
-                  Create 3P Room
-                </button>
+                <div className="minimal-btn-wrapper">
+                  {renderPointer('create_3p')}
+                  <button 
+                    className="minimal-text-btn"
+                    onMouseEnter={() => setHoveredBtn('create_3p')}
+                    onMouseLeave={() => setHoveredBtn(null)}
+                    onClick={() => { handleButtonClick(); onCreateRoom(3); }}
+                  >
+                    Create 3P Room
+                  </button>
+                </div>
               </div>
 
               <form onSubmit={handleJoin} style={{ width: '100%', marginTop: '1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -456,16 +475,18 @@ export default function MainMenu({
               </form>
 
               <div className="menu-item-row" style={{ marginTop: '2.5rem' }}>
-                {renderPointer('back')}
-                <button 
-                  className="minimal-text-btn"
-                  style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.3)', letterSpacing: '2px' }}
-                  onMouseEnter={() => setHoveredBtn('back')}
-                  onMouseLeave={() => setHoveredBtn(null)}
-                  onClick={() => { handleButtonClick(); setShowTeamOptions(false); }}
-                >
-                  Back
-                </button>
+                <div className="minimal-btn-wrapper">
+                  {renderPointer('back')}
+                  <button 
+                    className="minimal-text-btn"
+                    style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.3)', letterSpacing: '2px' }}
+                    onMouseEnter={() => setHoveredBtn('back')}
+                    onMouseLeave={() => setHoveredBtn(null)}
+                    onClick={() => { handleButtonClick(); setShowTeamOptions(false); }}
+                  >
+                    Back
+                  </button>
+                </div>
               </div>
             </div>
           )}
