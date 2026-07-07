@@ -276,7 +276,7 @@ export default function GameCanvas({
         const remainingColors = players.map(p => p.color).filter(Boolean);
         if (remainingColors.length > 0) {
           state.enemies.forEach(enemy => {
-            if (!remainingColors.includes(enemy.color)) {
+            if (enemy.type !== 'boss_shield' && enemy.type !== 'meteor' && enemy.color && !remainingColors.includes(enemy.color)) {
               // Deterministic selection based on enemy id so all clients align
               const cIndex = getDeterministicIndex(enemy.id, remainingColors.length);
               const newColor = remainingColors[cIndex];
@@ -293,12 +293,24 @@ export default function GameCanvas({
           });
 
           if (state.bossObj && state.bossObj.words) {
+            let bossColorChanged = false;
             state.bossObj.words.forEach(w => {
-              if (!remainingColors.includes(w.color)) {
+              if (w.color && !remainingColors.includes(w.color)) {
                 const wIndex = getDeterministicIndex(w.id, remainingColors.length);
                 w.color = remainingColors[wIndex];
+                bossColorChanged = true;
               }
             });
+            if (bossColorChanged) {
+              state.enemies.forEach(enemy => {
+                if (enemy.type === 'boss_shield') {
+                  const matchingWord = state.bossObj.words.find(w => w.id === enemy.id);
+                  if (matchingWord) {
+                    enemy.color = matchingWord.color;
+                  }
+                }
+              });
+            }
           }
         }
       }
@@ -1723,7 +1735,7 @@ export default function GameCanvas({
       const activeColors = getActivePlayerColors();
       if (activeColors.length > 0) {
         state.enemies.forEach(enemy => {
-          if (enemy.type !== 'boss_shield' && enemy.color && !activeColors.includes(enemy.color)) {
+          if (enemy.type !== 'boss_shield' && enemy.type !== 'meteor' && enemy.color && !activeColors.includes(enemy.color)) {
             const cIndex = getDeterministicIndex(enemy.id, activeColors.length);
             const newColor = activeColors[cIndex];
             enemy.color = newColor;
@@ -1741,12 +1753,24 @@ export default function GameCanvas({
         
         // Also shift active boss words if active boss word color doesn't match active players
         if (state.bossObj && state.bossObj.words) {
+          let bossColorChanged = false;
           state.bossObj.words.forEach(w => {
             if (w.color && !activeColors.includes(w.color)) {
               const wIndex = getDeterministicIndex(w.id, activeColors.length);
               w.color = activeColors[wIndex];
+              bossColorChanged = true;
             }
           });
+          if (bossColorChanged) {
+            state.enemies.forEach(enemy => {
+              if (enemy.type === 'boss_shield') {
+                const matchingWord = state.bossObj.words.find(w => w.id === enemy.id);
+                if (matchingWord) {
+                  enemy.color = matchingWord.color;
+                }
+              }
+            });
+          }
         }
       }
     }
