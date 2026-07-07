@@ -10,6 +10,7 @@ import MenuBackground from './components/MenuBackground';
 import StoryModal from './components/StoryModal';
 import DockingStation from './components/DockingStation';
 import InfoPopup from './components/InfoPopup';
+import { Analytics } from '@vercel/analytics/react';
 
 export default function App() {
   // Profile settings (persisted in localStorage)
@@ -669,6 +670,7 @@ export default function App() {
 
       {/* Subtle Screen Fade Transition Overlay */}
       <div className={`fade-transition-overlay ${transitionState}`} />
+      <Analytics />
     </div>
   );
 }
