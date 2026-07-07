@@ -1650,6 +1650,13 @@ export default function GameCanvas({
           setCharge(state.charge);
         }
 
+        if (enemy.type === 'anomaly') {
+          state.charge = Math.min(100, state.charge + 25);
+          setCharge(state.charge);
+          scoreGained += 1000;
+          state.anomalyWarningTimer = 0;
+        }
+
         // Remove enemy from list
         state.enemies = state.enemies.filter(e => e.id !== enemy.id);
         handleEnemyCompletion(enemy.id);
@@ -2272,9 +2279,10 @@ export default function GameCanvas({
           const childType = state.wave >= 46 ? 'interceptor' : 'drone';
           const childLen = state.wave >= 26 ? 4 : 3;
           
-          const rawWord = getWordForEnemy(childType, state.wave, state.usedWords);
-          const word1 = rawWord.substring(0, childLen);
-          const word2 = getWordForEnemy(childType, state.wave, state.usedWords).substring(0, childLen);
+          const rawWord1 = getWordForEnemy(childType, state.wave, state.usedWords) || 'default';
+          const word1 = rawWord1.substring(0, childLen);
+          const rawWord2 = getWordForEnemy(childType, state.wave, state.usedWords) || 'default';
+          const word2 = rawWord2.substring(0, childLen);
           
           const childSpeed = enemy.speed * 1.35;
           const leftX = Math.max(canvas.width * 0.22, enemy.x - 38);
@@ -2853,33 +2861,6 @@ export default function GameCanvas({
         speed = 2.5 + Math.random() * 1.5;
       }
 
-      const word = getWordForEnemy(type, state.wave, state.usedWords);
-      const enemyId = Math.random().toString(36).substring(2, 9);
-      
-      let wordQueue = [];
-      if (type === 'cruiser') {
-        // Generals have 2 to 3 words total (so 1 to 2 extra in queue)
-        const totalWords = Math.random() < 0.5 ? 2 : 3;
-        for (let w = 0; w < totalWords - 1; w++) {
-          let wColor = color;
-          if (isMultiplayer) {
-            const activeColors = getActivePlayerColors();
-            if (activeColors.length > 0) {
-              wColor = activeColors[Math.floor(Math.random() * activeColors.length)];
-            }
-          } else {
-            wColor = 'gold';
-          }
-          wordQueue.push({
-            word: getWordForEnemy('cruiser', state.wave, state.usedWords),
-            color: wColor
-          });
-        }
-      }
-
-      // Determine spawn column (keep within central 60% of screen)
-      const x = canvas.width * 0.25 + Math.random() * (canvas.width * 0.5);
-      
       // In co-op, assign player color targets using a non-predictive Shuffled Bag approach.
       // This guarantees an equal balance of spawns across active teammates over a small window.
       let color;
@@ -2911,6 +2892,33 @@ export default function GameCanvas({
         else if (type === 'shield_linker') color = 'blue';
         else color = 'purple';
       }
+
+      const word = getWordForEnemy(type, state.wave, state.usedWords);
+      const enemyId = Math.random().toString(36).substring(2, 9);
+      
+      let wordQueue = [];
+      if (type === 'cruiser') {
+        // Generals have 2 to 3 words total (so 1 to 2 extra in queue)
+        const totalWords = Math.random() < 0.5 ? 2 : 3;
+        for (let w = 0; w < totalWords - 1; w++) {
+          let wColor = color;
+          if (isMultiplayer) {
+            const activeColors = getActivePlayerColors();
+            if (activeColors.length > 0) {
+              wColor = activeColors[Math.floor(Math.random() * activeColors.length)];
+            }
+          } else {
+            wColor = 'gold';
+          }
+          wordQueue.push({
+            word: getWordForEnemy('cruiser', state.wave, state.usedWords),
+            color: wColor
+          });
+        }
+      }
+
+      // Determine spawn column (keep within central 60% of screen)
+      const x = canvas.width * 0.25 + Math.random() * (canvas.width * 0.5);
 
       // Choose movement pattern based on chances: 40% straight for common, 20% straight for elite
       const isElite = type === 'interceptor' || type === 'shield_linker' || type === 'anomaly';
