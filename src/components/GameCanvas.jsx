@@ -69,7 +69,7 @@ export default function GameCanvas({
     activeWordId: null,
     screenShake: 0,
     flashFrame: 0,
-    waveTransitionTimer: 180, // Countdown frames for wave intro
+    waveTransitionTimer: 120, // Countdown frames for wave intro
     waveState: 'intro', // 'intro', 'playing', 'boss_warning', 'boss_fight', 'victory'
     bossObj: null,
     lastSpawnTime: 0,
@@ -860,7 +860,7 @@ export default function GameCanvas({
           case 'NEXT_WAVE': {
             state.wave = data.wave;
             state.waveState = 'intro';
-            state.waveTransitionTimer = 180;
+            state.waveTransitionTimer = 120;
             state.enemies = [];
             state.bullets = [];
             state.waveSpawnedCount = 0;
@@ -3576,7 +3576,7 @@ export default function GameCanvas({
     state.wave = nextWaveNum;
     onScoreUpdate(state.score, nextWaveNum); // Update parent wave immediately
     state.waveState = 'intro';
-    state.waveTransitionTimer = 180;
+    state.waveTransitionTimer = 120;
     state.enemies = [];
     state.bullets = [];
     state.waveSpawnedCount = 0;
@@ -3750,8 +3750,8 @@ export default function GameCanvas({
     let strokeColor = `rgba(255, 255, 255, 0.025)`;
     let lineWidth = 1.0;
 
-    if (state.waveState === 'intro' && state.waveTransitionTimer > 120) {
-      const warpProgress = (state.waveTransitionTimer - 120) / 60; // 1.0 down to 0.0
+    if (state.waveState === 'intro' && state.waveTransitionTimer > 60) {
+      const warpProgress = (state.waveTransitionTimer - 60) / 60; // 1.0 down to 0.0
       yOffset = (state.waveTransitionTimer * 12.0 * warpProgress) % gridSize;
       lineWidth = 1.0 + warpProgress * 1.0;
       strokeColor = `rgba(255, 255, 255, ${0.025 + warpProgress * 0.02})`;
@@ -4989,13 +4989,13 @@ export default function GameCanvas({
         let sy = canvas.height - 80;
         if (state.waveState === 'docking') {
           sy -= state.dockingShipYOffset;
-        } else if (state.waveState === 'intro' && state.waveTransitionTimer > 60) {
-          const delay = p.isHost ? 0 : 40;
-          const activeTimer = state.waveTransitionTimer - 60;
+        } else if (state.waveState === 'intro' && state.waveTransitionTimer > 30) {
+          const delay = p.isHost ? 0 : 20;
+          const activeTimer = state.waveTransitionTimer - 30;
           const startY = canvas.height + 100;
           const targetY = canvas.height - 80;
           if (activeTimer > delay) {
-            const progress = (activeTimer - delay) / (120 - delay);
+            const progress = (activeTimer - delay) / (90 - delay);
             sy = targetY + (startY - targetY) * Math.pow(progress, 2);
           } else {
             sy = targetY; // Fixes flickering for non-hosts
@@ -5025,9 +5025,9 @@ export default function GameCanvas({
       let sy = canvas.height - 80;
       if (state.waveState === 'docking') {
         sy -= state.dockingShipYOffset;
-      } else if (state.waveState === 'intro' && state.waveTransitionTimer > 60) {
-        const activeTimer = state.waveTransitionTimer - 60;
-        const progress = activeTimer / 120;
+      } else if (state.waveState === 'intro' && state.waveTransitionTimer > 30) {
+        const activeTimer = state.waveTransitionTimer - 30;
+        const progress = activeTimer / 90;
         const startY = canvas.height + 100;
         const targetY = canvas.height - 80;
         sy = targetY + (startY - targetY) * Math.pow(progress, 2);
