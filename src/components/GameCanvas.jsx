@@ -777,6 +777,14 @@ export default function GameCanvas({
                   localE.physicsY = absoluteY;
                   localE.serverX = absoluteX; // maintain compatibility fallback
                   localE.serverY = absoluteY;
+
+                  // Sync additional properties from Host
+                  if (syncE.word !== undefined && localE.word !== syncE.word) {
+                    localE.word = syncE.word;
+                  }
+                  if (syncE.shieldLinkedEnemyId !== undefined) {
+                    localE.shieldLinkedEnemyId = syncE.shieldLinkedEnemyId;
+                  }
                 }
               });
               data.bullets.forEach(syncB => {
@@ -2142,14 +2150,16 @@ export default function GameCanvas({
     state.enemies.forEach(e => { e.isInvulnerable = false; });
     state.enemies.forEach(e => {
       if (e.type === 'shield_linker') {
-        if (!e.shieldLinkedEnemyId || !state.enemies.some(target => target.id === e.shieldLinkedEnemyId)) {
-          // Find a target that is NOT a linker, boss, or anomaly
-          const candidates = state.enemies.filter(cand => cand.id !== e.id && cand.type !== 'shield_linker' && cand.type !== 'boss' && cand.type !== 'anomaly');
-          if (candidates.length > 0) {
-            e.shieldLinkedEnemyId = candidates[Math.floor(Math.random() * candidates.length)].id;
-            GameAudio.play('shield_activate');
-          } else {
-            e.shieldLinkedEnemyId = null;
+        if (!isMultiplayer || isHost) {
+          if (!e.shieldLinkedEnemyId || !state.enemies.some(target => target.id === e.shieldLinkedEnemyId)) {
+            // Find a target that is NOT a linker, boss, or anomaly
+            const candidates = state.enemies.filter(cand => cand.id !== e.id && cand.type !== 'shield_linker' && cand.type !== 'boss' && cand.type !== 'anomaly');
+            if (candidates.length > 0) {
+              e.shieldLinkedEnemyId = candidates[Math.floor(Math.random() * candidates.length)].id;
+              GameAudio.play('shield_activate');
+            } else {
+              e.shieldLinkedEnemyId = null;
+            }
           }
         }
         if (e.shieldLinkedEnemyId) {
@@ -2220,22 +2230,24 @@ export default function GameCanvas({
         enemy.scrambleTimer = (enemy.scrambleTimer || 0) + 1;
         if (enemy.scrambleTimer >= 240) {
           enemy.scrambleTimer = 0;
-          const candidates = state.enemies.filter(cand => cand.id !== enemy.id && cand.type !== 'shield_linker' && cand.type !== 'boss' && cand.word && cand.word.length > 3);
-          if (candidates.length > 0) {
-            const target = candidates[Math.floor(Math.random() * candidates.length)];
-            const chars = target.word.split('');
-            const i1 = Math.floor(Math.random() * chars.length);
-            let i2 = Math.floor(Math.random() * chars.length);
-            if (i1 === i2) i2 = (i1 + 1) % chars.length;
-            
-            // Swap
-            const tmp = chars[i1];
-            chars[i1] = chars[i2];
-            chars[i2] = tmp;
-            target.word = chars.join('');
-            
-            createExplosion(target.x, target.y, '#8b5cf6', 10, true);
-            GameAudio.play('laser'); // Scramble glitch sound
+          if (!isMultiplayer || isHost) {
+            const candidates = state.enemies.filter(cand => cand.id !== enemy.id && cand.type !== 'shield_linker' && cand.type !== 'boss' && cand.word && cand.word.length > 3);
+            if (candidates.length > 0) {
+              const target = candidates[Math.floor(Math.random() * candidates.length)];
+              const chars = target.word.split('');
+              const i1 = Math.floor(Math.random() * chars.length);
+              let i2 = Math.floor(Math.random() * chars.length);
+              if (i1 === i2) i2 = (i1 + 1) % chars.length;
+              
+              // Swap
+              const tmp = chars[i1];
+              chars[i1] = chars[i2];
+              chars[i2] = tmp;
+              target.word = chars.join('');
+              
+              createExplosion(target.x, target.y, '#8b5cf6', 10, true);
+              GameAudio.play('laser'); // Scramble glitch sound
+            }
           }
         }
       }
@@ -2647,7 +2659,13 @@ export default function GameCanvas({
       state.syncTimer = (state.syncTimer || 0) + 1;
       if (state.syncTimer >= 8) {
         state.syncTimer = 0;
-        const enemyPositions = state.enemies.map(e => ({ id: e.id, x: e.x / canvas.width, y: e.y / canvas.height }));
+        const enemyPositions = state.enemies.map(e => ({
+          id: e.id,
+          x: e.x / canvas.width,
+          y: e.y / canvas.height,
+          word: e.word,
+          shieldLinkedEnemyId: e.shieldLinkedEnemyId
+        }));
         const bulletPositions = state.bullets.map(b => ({ id: b.id, x: b.x / canvas.width, y: b.y / canvas.height }));
         const bossData = state.bossObj ? {
           x: state.bossObj.x / canvas.width,
