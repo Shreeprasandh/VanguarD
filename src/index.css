@@ -1022,11 +1022,11 @@ body::-webkit-scrollbar,
   cursor: not-allowed;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   outline: none;
-  opacity: 0.25;
+  opacity: 0.4;
 }
 
 .checkpoint-box.unlocked {
-  opacity: 1;
+  opacity: 0.8;
   color: var(--neon-blue);
   border-color: var(--neon-blue);
   cursor: pointer;
@@ -1034,6 +1034,7 @@ body::-webkit-scrollbar,
 }
 
 .checkpoint-box.unlocked:hover {
+  opacity: 1;
   transform: translateY(-2px) scale(1.08);
   box-shadow: 0 0 15px var(--neon-blue);
   background: rgba(74, 144, 226, 0.06);
