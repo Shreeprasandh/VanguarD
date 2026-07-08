@@ -527,6 +527,20 @@ wss.on('connection', (ws) => {
           break;
         }
 
+        case 'BOSS_DESTROYED': {
+          if (player.roomId) {
+            sendToRoom(player.roomId, {
+              type: 'BOSS_DESTROYED',
+              bossId: data.bossId,
+              x: data.x,
+              y: data.y,
+              color: data.color,
+              hostId: socketId
+            }, socketId);
+          }
+          break;
+        }
+
         case 'BOSS_WARNING': {
           if (player.roomId) {
             sendToRoom(player.roomId, {

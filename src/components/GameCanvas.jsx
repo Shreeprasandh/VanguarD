@@ -589,6 +589,55 @@ export default function GameCanvas({
             break;
           }
 
+          case 'BOSS_DESTROYED': {
+            if (socket.id !== data.hostId) {
+              const boss = state.bossObj;
+              const bossX = (data.x !== undefined ? data.x * canvas.width : (boss ? boss.x : canvas.width / 2));
+              const bossY = (data.y !== undefined ? data.y * canvas.height : (boss ? boss.y : 120));
+              const bossColor = data.color || (boss ? boss.color : '#ffffff');
+
+              // Play boss_explosion sound
+              GameAudio.play('boss_explosion');
+              
+              // Create the massive white explosion at the boss's location
+              createExplosion(bossX, bossY, '#ffffff', 80, true);
+
+              // Spawn spinning metal chunks
+              for (let c = 0; c < 7; c++) {
+                const angle = Math.random() * Math.PI * 2;
+                const force = 1.5 + Math.random() * 2.5;
+                state.particles.push({
+                  x: bossX + (Math.random() - 0.5) * 40,
+                  y: bossY + (Math.random() - 0.5) * 20,
+                  vx: Math.cos(angle) * force,
+                  vy: Math.sin(angle) * force - 0.5,
+                  size: 4 + Math.random() * 8,
+                  color: 'rgba(168, 85, 247, 0.4)', // soft purple chunk
+                  alpha: 0.95,
+                  life: 60 + Math.random() * 40,
+                  type: 'chunk',
+                  angle: Math.random() * Math.PI * 2,
+                  rotSpeed: (Math.random() - 0.5) * 0.15
+                });
+              }
+
+              state.bossObj = null;
+
+              // Clear all remaining minions/bullets
+              state.enemies = [];
+              state.bullets = [];
+
+              // Spawn shield claim orb animation
+              if (!state.shieldClaims) state.shieldClaims = [];
+              state.shieldClaims.push({
+                x: bossX,
+                y: bossY,
+                progress: 0
+              });
+            }
+            break;
+          }
+
           case 'ANOMALY_WARNING': {
             state.anomalyWarningTimer = 180; // 3 seconds banner alert
             GameAudio.play('emp');
@@ -837,6 +886,9 @@ export default function GameCanvas({
                   }
                   state.bossObj.empTimer = data.boss.empTimer;
                 }
+              } else if (!data.boss && state.bossObj) {
+                state.bossObj = null;
+                state.enemies = state.enemies.filter(e => e.type !== 'boss_shield');
               }
 
               data.enemies.forEach(syncE => {
@@ -3809,6 +3861,19 @@ export default function GameCanvas({
         // Wait, clear all remaining minions/bullets
         state.enemies = [];
         state.bullets = [];
+
+        if (isMultiplayer && socket) {
+          const canvas = canvasRef.current;
+          const widthVal = canvas ? canvas.width : window.innerWidth;
+          const heightVal = canvas ? canvas.height : window.innerHeight;
+          socket.send(JSON.stringify({
+            type: 'BOSS_DESTROYED',
+            bossId: boss.id,
+            x: boss.x / widthVal,
+            y: boss.y / heightVal,
+            color: boss.color
+          }));
+        }
         
         // Advance wave or docking station
         if (!isMultiplayer || isHost) {
