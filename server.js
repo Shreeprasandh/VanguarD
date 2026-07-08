@@ -31,7 +31,8 @@ try {
 }
 
 function broadcastHighScores() {
-  const payload = JSON.stringify({ type: 'LEADERBOARD_UPDATE', leaderboard: highScores });
+  const sortedTop10 = [...highScores].sort((a, b) => b.score - a.score).slice(0, 10);
+  const payload = JSON.stringify({ type: 'LEADERBOARD_UPDATE', leaderboard: sortedTop10 });
   wss.clients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(payload);
@@ -139,7 +140,6 @@ wss.on('connection', (ws) => {
           }
 
           highScores.sort((a, b) => b.score - a.score);
-          highScores = highScores.slice(0, 10);
 
           try {
             fs.writeFileSync(LEADERBOARD_FILE, JSON.stringify(highScores, null, 2));
