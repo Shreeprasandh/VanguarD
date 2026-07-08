@@ -12,13 +12,18 @@ export async function registerPilot(username, password) {
     throw new Error('Connection to the server failed. Please check your network connection.');
   }
 
-  const email = `${normalizedUser}@vanguardz.local`;
+  const email = `${normalizedUser}@vanguardz.com`;
   const { data: authData, error: authError } = await supabase.auth.signUp({
     email,
     password,
   });
 
-  if (authError) throw authError;
+  if (authError) {
+    let msg = authError.message || 'Registration failed.';
+    msg = msg.replace(/email/gi, 'Callsign');
+    msg = msg.replace(/[a-zA-Z0-9._%+-]+@vanguardz\.[a-zA-Z]+/g, username);
+    throw new Error(msg);
+  }
 
   const user = authData.user;
   if (!user) throw new Error('Registration failed');
@@ -46,13 +51,18 @@ export async function loginPilot(username, password) {
     throw new Error('Connection to the server failed. Please check your network connection.');
   }
 
-  const email = `${normalizedUser}@vanguardz.local`;
+  const email = `${normalizedUser}@vanguardz.com`;
   const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
 
-  if (authError) throw authError;
+  if (authError) {
+    let msg = authError.message || 'Authentication failed.';
+    msg = msg.replace(/email/gi, 'Callsign');
+    msg = msg.replace(/[a-zA-Z0-9._%+-]+@vanguardz\.[a-zA-Z]+/g, username);
+    throw new Error(msg);
+  }
 
   // Retrieve profile
   const { data: profileData, error: profileError } = await supabase
