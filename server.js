@@ -398,7 +398,9 @@ wss.on('connection', (ws) => {
             type: 'CAST_SKILL',
             socketId: socketId,
             skillId: data.skillId,
-            slot: data.slot
+            slot: data.slot,
+            targetEnemyId: data.targetEnemyId,
+            targetEnemyIds: data.targetEnemyIds
           });
           break;
         }

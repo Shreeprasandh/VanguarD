@@ -700,14 +700,19 @@ export default function GameCanvas({
                   });
                   createExplosion(window.innerWidth / 2, window.innerHeight * 0.3, resolvedColor, 30);
                 } else if (data.skillId === 'laser_sweep') {
+                  const toKill = [];
                   state.enemies.forEach(e => {
                     if (e.word && e.word.length > 0) {
                       e.word = e.word.substring(1);
                       if (state.activeWordId === e.id) {
                         e.targetIndex = Math.max(0, e.targetIndex - 1);
                       }
+                      if (e.word.length === 0) {
+                        toKill.push(e);
+                      }
                     }
                   });
+                  toKill.forEach(e => handleEnemyKill(e));
                   createExplosion(window.innerWidth / 2, window.innerHeight * 0.4, resolvedColor, 25);
                 } else if (data.skillId === 'decoy_probe') {
                   state.decoyTime = 6000;
@@ -717,6 +722,78 @@ export default function GameCanvas({
                   state.reflectorTime = 5000;
                 } else if (data.skillId === 'hologram_decoy') {
                   state.hologramTime = 6000;
+                } else if (data.skillId === 'auto_scribe') {
+                  if (data.targetEnemyId) {
+                    const target = state.enemies.find(e => e.id === data.targetEnemyId);
+                    if (target && target.word) {
+                      let lettersCount = 8;
+                      if (target.type === 'interceptor') lettersCount = 6;
+                      else if (target.type === 'cruiser') lettersCount = 4;
+                      else if (target.type === 'boss') lettersCount = 2;
+
+                      const toType = Math.min(lettersCount, target.word.length);
+                      target.word = target.word.substring(toType);
+                      target.targetIndex = 0;
+                      
+                      if (target.word.length === 0) {
+                        handleEnemyKill(target);
+                      } else {
+                        createExplosion(target.x, target.y, resolvedColor, 8);
+                      }
+                    }
+                  }
+                } else if (data.skillId === 'data_purge') {
+                  if (data.targetEnemyIds && data.targetEnemyIds[0]) {
+                    const target = state.enemies.find(e => e.id === data.targetEnemyIds[0]);
+                    if (target) {
+                      target.word = '';
+                      handleEnemyKill(target);
+                    }
+                  }
+                } else if (data.skillId === 'chain_strike') {
+                  if (data.targetEnemyIds && Array.isArray(data.targetEnemyIds)) {
+                    data.targetEnemyIds.forEach(id => {
+                      const e = state.enemies.find(enemy => enemy.id === id);
+                      if (e && e.word && e.word.length > 0) {
+                        const toType = Math.min(2, e.word.length);
+                        e.word = e.word.substring(toType);
+                        e.targetIndex = 0;
+                        if (e.word.length === 0) {
+                          handleEnemyKill(e);
+                        } else {
+                          createExplosion(e.x, e.y, resolvedColor, 6);
+                        }
+                      }
+                    });
+                  }
+                } else if (data.skillId === 'shatter_code') {
+                  if (state.waveState === 'boss_fight' && state.bossObj && data.targetEnemyId) {
+                    const boss = state.bossObj;
+                    const activeShield = boss.words.find(w => w.id === data.targetEnemyId);
+                    if (activeShield && activeShield.word) {
+                      const count = Math.ceil(activeShield.word.length * 0.25);
+                      activeShield.word = activeShield.word.substring(count);
+                      
+                      const shieldEnemy = state.enemies.find(e => e.id === activeShield.id);
+                      if (shieldEnemy) {
+                        shieldEnemy.word = activeShield.word;
+                        shieldEnemy.targetIndex = 0;
+                      }
+
+                      if (activeShield.word.length === 0) {
+                        activeShield.completed = true;
+                        const players = state.players || [];
+                        const isHost = !isMultiplayer || (players.find(p => p.socketId === socket?.id)?.isHost);
+                        if (isHost) {
+                          checkBossShieldsCompleted(activeShield.id);
+                        } else {
+                          state.enemies = state.enemies.filter(e => e.id !== activeShield.id);
+                        }
+                      } else {
+                        createExplosion(boss.x, boss.y, resolvedColor, 12);
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -1086,19 +1163,25 @@ export default function GameCanvas({
         state.shieldActive = true;
         break;
 
-      case 'laser_sweep':
+      case 'laser_sweep': {
         // Strip first letter of all active words
+        const toKill = [];
         state.enemies.forEach(e => {
           if (e.word && e.word.length > 0) {
             e.word = e.word.substring(1);
             if (state.activeWordId === e.id) {
               e.targetIndex = Math.max(0, e.targetIndex - 1);
             }
+            if (e.word.length === 0) {
+              toKill.push(e);
+            }
           }
         });
+        toKill.forEach(e => handleEnemyKill(e));
         // Spark a glowing swipe laser line across screen center
         createExplosion(canvasRef.current.width / 2, canvasRef.current.height * 0.4, skill.color, 25);
         break;
+      }
 
       case 'quantum_warp':
         // Wipe all bullets on screen
@@ -1114,6 +1197,7 @@ export default function GameCanvas({
         // Find targeted enemy
         const target = state.enemies.find(e => e.id === state.activeWordId);
         if (target && target.word) {
+          state.lastAutoScribeTarget = target.id;
           let lettersCount = 8;
           if (target.type === 'interceptor') lettersCount = 6;
           else if (target.type === 'cruiser') lettersCount = 4;
@@ -1175,6 +1259,7 @@ export default function GameCanvas({
           }
         });
         if (target) {
+          state.lastDataPurgeTarget = target.id;
           target.word = '';
           handleEnemyKill(target);
         }
@@ -1188,6 +1273,7 @@ export default function GameCanvas({
       case 'chain_strike': {
         // Pick 3 random enemies
         const shuffed = [...state.enemies].sort(() => 0.5 - Math.random()).slice(0, 3);
+        state.lastChainStrikeTargets = shuffed.map(e => e.id);
         shuffed.forEach(e => {
           if (e.word && e.word.length > 0) {
             const toType = Math.min(2, e.word.length);
@@ -1255,10 +1341,26 @@ export default function GameCanvas({
 
     // Broadcast skill use in co-op
     if (isMultiplayer && socket) {
+      let targetEnemyId = null;
+      let targetEnemyIds = null;
+      
+      if (skillId === 'auto_scribe') {
+        targetEnemyId = state.lastAutoScribeTarget || null;
+      } else if (skillId === 'shatter_code' && state.bossObj) {
+        const activeShield = state.bossObj.words.find(w => w.active && !w.completed);
+        if (activeShield) targetEnemyId = activeShield.id;
+      } else if (skillId === 'data_purge') {
+        targetEnemyIds = state.lastDataPurgeTarget ? [state.lastDataPurgeTarget] : null;
+      } else if (skillId === 'chain_strike') {
+        targetEnemyIds = state.lastChainStrikeTargets || null;
+      }
+
       socket.send(JSON.stringify({
         type: 'CAST_SKILL',
         skillId: skillId,
-        slot: slotIdx
+        slot: slotIdx,
+        targetEnemyId: targetEnemyId,
+        targetEnemyIds: targetEnemyIds
       }));
     }
   };
