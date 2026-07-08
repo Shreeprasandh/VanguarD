@@ -7,6 +7,12 @@ export const supabase = (supabaseUrl && supabaseAnonKey)
   ? createClient(supabaseUrl, supabaseAnonKey) 
   : null;
 
+if (!supabase) {
+  console.warn("Vanguardz WARNING: Supabase keys not loaded. LocalStorage offline fallback active.");
+} else {
+  console.info("Vanguardz INFO: Connected to Supabase security service.");
+}
+
 const LOCAL_CHECKPOINT_KEY = 'vanguardz_local_checkpoint';
 
 export async function registerPilot(username, password) {
