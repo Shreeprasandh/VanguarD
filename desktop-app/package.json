@@ -1,0 +1,16 @@
+{
+  "name": "vanguardz",
+  "version": "1.0.0",
+  "description": "VanguarDZ - Typing Space Action Game",
+  "main": "main.js",
+  "scripts": {
+    "build": "npx vite build --config vite.desktop.config.js",
+    "start": "electron .",
+    "package": "npm run build && electron-packager . VanguarDZ --platform=win32 --arch=x64 --out=release --overwrite"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-packager": "^17.1.2"
+  }
+}
