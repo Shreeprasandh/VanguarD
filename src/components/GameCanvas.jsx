@@ -2157,8 +2157,8 @@ export default function GameCanvas({
         state.waveState = 'playing';
         state.meteorShowerTriggered = false; // Reset meteor shower status
         state.lastSpawnTime = Date.now(); // Reset spawn timing on intro end to give clients sync headroom
-        if (isHost && isPrime(state.wave) && state.wave % 10 !== 0) {
-          if (Math.random() < 0.35) { // Spawn chance reduced from 45% to 35%
+        if (isHost && state.wave >= 16 && isPrime(state.wave) && state.wave % 10 !== 0) {
+          if (Math.random() < 0.25) { // Spawn chance reduced to 25%
             spawnAnomalyMiniBoss();
           }
         }
@@ -2196,8 +2196,8 @@ export default function GameCanvas({
       const totalToSpawn = state.wave >= 100 ? 999999 : state.waveTotalToSpawn;
       
       // Pause spawning if the player is overwhelmed (too many active enemies on screen).
-      // Max active enemies starts at 8 on low levels, scaling up to a controlled maximum of 11 on higher levels (down 25% from 15 to prevent overwhelming the screen).
-      const maxActiveEnemies = state.wave < 5 ? 8 : (state.wave < 15 ? 10 : 11);
+      // Max active enemies starts at 6 on low levels, scaling up to a controlled maximum of 10 on higher levels.
+      const maxActiveEnemies = state.wave < 5 ? 6 : (state.wave < 15 ? 8 : 10);
       
       if (now - state.lastSpawnTime > spawnInterval && state.waveSpawnedCount < totalToSpawn && state.enemies.length < maxActiveEnemies) {
         spawnNewEnemyWave();
@@ -2210,7 +2210,11 @@ export default function GameCanvas({
         if (state.wave % 10 === 0 || state.wave === 100) {
           triggerBossWarning();
         } else if (state.wave % 5 === 0) {
-          spawnMiniBossFight();
+          if (Math.random() < 0.45) {
+            spawnMiniBossFight();
+          } else {
+            handleWaveEndDetection();
+          }
         } else {
           // Go to next wave or docking station
           handleWaveEndDetection();
@@ -2364,7 +2368,7 @@ export default function GameCanvas({
     state.enemies.forEach(e => {
       if (e.type === 'shield_linker') {
         if (!isMultiplayer || isHost) {
-          if (!e.shieldLinkedEnemyId || !state.enemies.some(target => target.id === e.shieldLinkedEnemyId)) {
+          if (!e.hasLinkedOnce) {
             // Find a target that is drone or interceptor (elite)
             const candidates = state.enemies.filter(cand => 
               cand.id !== e.id && 
@@ -2372,6 +2376,7 @@ export default function GameCanvas({
             );
             if (candidates.length > 0) {
               e.shieldLinkedEnemyId = candidates[Math.floor(Math.random() * candidates.length)].id;
+              e.hasLinkedOnce = true;
               GameAudio.play('shield_activate');
             } else {
               e.shieldLinkedEnemyId = null;
@@ -2388,7 +2393,7 @@ export default function GameCanvas({
     });
 
     // Enemies movement
-    const baseSpeedMultiplier = state.wave >= 100 ? 5.5 : (1.172 + (state.wave * 0.028)); // Speed scales up with waves (75% adjustment for wave 80 limit)
+    const baseSpeedMultiplier = state.wave >= 100 ? 5.5 : Math.min(3.0, 1.172 + (state.wave * 0.028)); // Speed scales up with waves, capped at 3.0 to keep higher waves playable
     
     let multiplayerDifficulty = 1.0;
     if (isMultiplayer && players) {
@@ -2752,11 +2757,20 @@ export default function GameCanvas({
         } else {
           takeDamage(dmg);
         }
-        // Destroy enemy
-        state.enemies = state.enemies.filter(e => e.id !== enemy.id);
+        // Destroy enemy and any shield linker linked to it
+        const linkedLinkers = state.enemies.filter(e => e.type === 'shield_linker' && e.shieldLinkedEnemyId === enemy.id);
+        
+        state.enemies = state.enemies.filter(e => e.id !== enemy.id && !(e.type === 'shield_linker' && e.shieldLinkedEnemyId === enemy.id));
         handleEnemyCompletion(enemy.id);
         if (state.activeWordId === enemy.id) state.activeWordId = null;
         createExplosion(enemy.x, enemy.y, explColor, dmg, true);
+        
+        linkedLinkers.forEach(linker => {
+          handleEnemyCompletion(linker.id);
+          if (state.activeWordId === linker.id) state.activeWordId = null;
+          createExplosion(linker.x, linker.y, '#3b82f6', 15, true); // Blue explosion for the linker
+        });
+        
         GameAudio.play('explosionLarge');
       }
     });
@@ -2974,7 +2988,7 @@ export default function GameCanvas({
       color: anomalyColor,
       x: canvas.width / 2,
       y: 120, // hover at upper height
-      speed: 0.05,
+      speed: 0.045, // Speed reduced by 10% (0.05 -> 0.045)
       targetIndex: 0,
       type: 'anomaly',
       shootCooldown: 140
@@ -3077,18 +3091,18 @@ export default function GameCanvas({
       const isKamikazeWave = state.wave >= 5;
       const kamikazeChance = isKamikazeWave ? (state.wave < 40 ? 0.06 : 0.11) : 0.0; // Reduced spawn chance by 2% (0.08->0.06, 0.13->0.11)
 
-      if (state.wave >= 16 && rng > 0.96) {
+      if (state.wave >= 25 && rng > 0.96) {
         type = 'replicator';
-        speed = 0.45 + Math.random() * 0.15;
-      } else if (state.wave >= 12 && rng > 0.91 && rng <= 0.96) {
+        speed = 0.405 + Math.random() * 0.135; // Speed reduced by 10% (from 0.45 -> 0.405, and 0.15 -> 0.135)
+      } else if (state.wave >= 21 && rng > 0.91 && rng <= 0.96) {
         type = 'stealth_cloaker';
-        speed = 0.5 + Math.random() * 0.2;
-      } else if (state.wave >= 11 && rng > 0.84 && rng <= 0.91) {
+        speed = 0.425 + Math.random() * 0.17; // Speed reduced by 15% (from 0.5 -> 0.425, and 0.2 -> 0.17)
+      } else if (state.wave >= 17 && rng > 0.86 && rng <= 0.91) {
         type = 'shield_linker';
-        speed = 0.4 + Math.random() * 0.15;
-      } else if (state.wave >= 7 && rng > 0.76 && rng <= 0.84) {
+        speed = 0.32 + Math.random() * 0.12; // Speed reduced by 20% (from 0.4 -> 0.32, and 0.15 -> 0.12)
+      } else if (state.wave >= 9 && rng > 0.79 && rng <= 0.84) {
         type = 'cruiser'; // General
-        speed = 0.27 + Math.random() * 0.18; // Speed reduced by 10% (0.3 -> 0.27, 0.2 -> 0.18)
+        speed = 0.189 + Math.random() * 0.126; // Speed reduced by 30% (from 0.27 -> 0.189, and 0.18 -> 0.126)
         hp = 2;
       } else if (isKamikazeWave && rng > 0.70 - kamikazeChance && rng <= 0.70) {
         type = 'kamikaze';
@@ -3230,6 +3244,8 @@ export default function GameCanvas({
   // Host fires bullets from general cruiser
   const fireGeneralBullet = (cruiser) => {
     const state = stateRef.current;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
     const bulletId = Math.random().toString(36).substring(2, 9);
     // Random single letter
     const alphabet = 'abcdefghijklmnopqrstuvwxyz';
@@ -3470,7 +3486,8 @@ export default function GameCanvas({
   // Boss fires single-letter bullet
   const fireBossBullet = () => {
     const state = stateRef.current;
-    if (!state.bossObj) return;
+    const canvas = canvasRef.current;
+    if (!canvas || !state.bossObj) return;
 
     const players = state.players || [];
     const bulletId = Math.random().toString(36).substring(2, 9);
@@ -3590,7 +3607,7 @@ export default function GameCanvas({
     
     if (state.wave === 40) {
       type = Math.random() < 0.6 ? 'kamikaze' : 'shield_linker';
-      speed = type === 'kamikaze' ? 1.4 : 0.45;
+      speed = type === 'kamikaze' ? 1.4 : 0.36; // Speed reduced by 20% (0.45 -> 0.36)
     }
 
     const word = getWordForEnemy(type, state.wave, state.usedWords);
@@ -4557,7 +4574,28 @@ export default function GameCanvas({
         ctx.arc(0, 0, 8, 0, Math.PI * 2);
         ctx.stroke();
       } else if (enemy.type === 'replicator') {
-        // Double diamond geometric shape
+        // Glowing split-charge ring indicating divide progress
+        const chargeRatio = Math.max(0, Math.min(1, 1 - ((enemy.splitTimer !== undefined ? enemy.splitTimer : 300) / (enemy.splitMaxTimer || 300))));
+        ctx.save();
+        ctx.strokeStyle = `rgba(168, 85, 247, ${0.3 + chargeRatio * 0.7})`; // Violet glowing ring
+        ctx.shadowColor = '#a855f7';
+        ctx.shadowBlur = 4 + chargeRatio * 8;
+        ctx.lineWidth = 1.0 + chargeRatio * 1.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, 22, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * chargeRatio));
+        ctx.stroke();
+        ctx.restore();
+
+        // Double diamond geometric shape with flash warning when close to splitting
+        ctx.save();
+        if (chargeRatio > 0.75) {
+          const flashPeriod = Math.max(50, 150 - (chargeRatio - 0.75) * 400); // Pulse faster as charge increases
+          if (Math.floor(Date.now() / flashPeriod) % 2 === 0) {
+            ctx.strokeStyle = '#ef4444'; // Flashing red warning color
+            ctx.shadowColor = '#ef4444';
+            ctx.shadowBlur = 8;
+          }
+        }
         ctx.beginPath();
         ctx.moveTo(0, 18);
         ctx.lineTo(12, 0);
@@ -4573,6 +4611,7 @@ export default function GameCanvas({
         ctx.lineTo(0, 8);
         ctx.closePath();
         ctx.stroke();
+        ctx.restore();
       } else if (enemy.type === 'interceptor') {
         // Sleek forward-swept wing fighter (Elite - 40 variants)
         ctx.moveTo(0, 24);
