@@ -108,6 +108,11 @@ export default function GameCanvas({
     bossShieldsCount: 0,
     shieldClaims: [],
     players: players || [],
+    correctStrikes: 0,
+    totalTypos: 0,
+    gameStartTime: Date.now(),
+    completedWordsList: [],
+    teammateStats: {},
     isReviving: false,
     reviveTimeRemaining: 0
   });
@@ -979,6 +984,22 @@ export default function GameCanvas({
             break;
           }
 
+          case 'TYPING_STATS_SHARE': {
+            state.teammateStats = state.teammateStats || {};
+            state.teammateStats[data.playerId] = {
+              socketId: data.playerId,
+              username: data.username || 'Teammate',
+              color: data.color || 'blue',
+              wpm: data.wpm,
+              accuracy: data.accuracy,
+              typos: data.typos,
+              correctStrikes: data.correctStrikes,
+              longestWord: data.longestWord,
+              favoriteWord: data.favoriteWord
+            };
+            break;
+          }
+
           case 'GAME_OVER': {
             triggerGameOver(data.finalScore, data.waveReached);
             break;
@@ -1625,6 +1646,7 @@ export default function GameCanvas({
       const bullet = state.bullets[bulletToHitIndex];
       // Cancel it locally
       state.bullets.splice(bulletToHitIndex, 1);
+      state.correctStrikes += 1;
       createExplosion(bullet.x, bullet.y, '#ffffff', 10);
       GameAudio.play('hit', getPan(bullet.x));
       
@@ -1678,6 +1700,7 @@ export default function GameCanvas({
           }
         } else {
           enemy.typos = (enemy.typos || 0) + 1;
+          state.totalTypos += 1;
           triggerTypoEffect();
           if (state.shieldActive) {
             state.shieldActive = false; // absorb mistake
@@ -1726,6 +1749,7 @@ export default function GameCanvas({
       }
 
       // General typo outside active target
+      state.totalTypos += 1;
       triggerTypoEffect();
       if (state.shieldActive) {
         state.shieldActive = false;
@@ -1777,6 +1801,7 @@ export default function GameCanvas({
 
     const charIndex = enemy.targetIndex;
     enemy.targetIndex += 1;
+    state.correctStrikes += 1;
     
     // Increment streak/multiplier
     state.streak += 1;
@@ -1824,6 +1849,7 @@ export default function GameCanvas({
     let scoreGained = 10 * state.multiplier;
 
     if (wordFinished) {
+      state.completedWordsList.push(enemy.word);
       // Calculate completion score bonus
       scoreGained += enemy.word.length * 5 * state.multiplier;
       
@@ -3985,7 +4011,6 @@ export default function GameCanvas({
     state.streak = 0;
     updateStreakShield(0);
 
-    state.screenShake = 12;
     state.flashFrame = 4;
     GameAudio.play('explosionPlayer');
 
@@ -4049,12 +4074,68 @@ export default function GameCanvas({
       createExplosion(x, y, '#ff1111', 40, true);
     }
 
+    // 1. Calculate local player stats
+    const elapsedMinutes = (Date.now() - state.gameStartTime) / 60000;
+    const localWpm = Math.round((state.correctStrikes / 5) / Math.max(0.1, elapsedMinutes));
+    const localAccuracy = Math.round((state.correctStrikes / Math.max(1, state.correctStrikes + state.totalTypos)) * 100);
+    const localTypos = state.totalTypos;
+    const localStrikes = state.correctStrikes;
+    
+    // Longest word
+    let longestWord = '';
+    if (state.completedWordsList.length > 0) {
+      longestWord = [...state.completedWordsList].sort((a, b) => b.length - a.length)[0];
+    }
+    
+    // Favorite word (most frequent)
+    let favoriteWord = '';
+    if (state.completedWordsList.length > 0) {
+      const counts = {};
+      state.completedWordsList.forEach(w => { counts[w] = (counts[w] || 0) + 1; });
+      favoriteWord = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+    }
+
+    const localStats = {
+      socketId: socket?.id || 'local',
+      username: username || 'Player 1',
+      color: shipColor || 'blue',
+      wpm: localWpm,
+      accuracy: localAccuracy,
+      typos: localTypos,
+      correctStrikes: localStrikes,
+      longestWord: longestWord,
+      favoriteWord: favoriteWord
+    };
+
+    // 2. Broadcast local stats if multiplayer
+    if (isMultiplayer && socket) {
+      socket.send(JSON.stringify({
+        type: 'TYPING_STATS_SHARE',
+        playerId: socket.id,
+        username: username,
+        color: shipColor,
+        wpm: localWpm,
+        accuracy: localAccuracy,
+        typos: localTypos,
+        correctStrikes: localStrikes,
+        longestWord: longestWord,
+        favoriteWord: favoriteWord
+      }));
+    }
+
     if (!isMultiplayer && waveReached >= 100 && onSaveCheckpoint) {
       onSaveCheckpoint(100);
     }
 
     setTimeout(() => {
-      onGameOver(finalScore, waveReached);
+      // Compile stats (local + teammate stats)
+      const allStats = [localStats];
+      if (isMultiplayer && state.teammateStats) {
+        Object.values(state.teammateStats).forEach(stat => {
+          allStats.push(stat);
+        });
+      }
+      onGameOver(finalScore, waveReached, allStats);
     }, 1500);
   };
 
@@ -4160,6 +4241,7 @@ export default function GameCanvas({
       // Check if all boss words completed
       if (completedCount >= boss.words.length) {
         // Boss destroyed!
+        state.screenShake = 7;
         createExplosion(boss.x, boss.y, '#ffffff', 80, true);
         GameAudio.play('boss_explosion');
         

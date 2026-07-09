@@ -695,8 +695,11 @@ export default function App() {
     setGameStats({ score, wave });
   };
 
-  const handleGameOver = (finalScore, waveReached) => {
+  const [typingStats, setTypingStats] = useState([]);
+
+  const handleGameOver = (finalScore, waveReached, stats) => {
     setGameStats({ score: finalScore, wave: waveReached });
+    setTypingStats(stats || []);
     changeScreenWithFade('gameover');
 
     // Submit score to persistent leaderboard on game over if solo
@@ -832,6 +835,7 @@ export default function App() {
             wave={gameStats.wave}
             isMultiplayer={isMultiplayer}
             teamPlayers={players}
+            typingStats={typingStats}
             onReturnMenu={handleReturnMenu}
             onReturnLobby={handleReturnLobby}
           />

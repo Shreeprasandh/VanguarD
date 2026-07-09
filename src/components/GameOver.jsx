@@ -1,7 +1,7 @@
 import React from 'react';
 import { GameAudio } from '../game/audio';
 
-export default function GameOver({ score, wave, isMultiplayer, teamPlayers, onReturnMenu, onReturnLobby }) {
+export default function GameOver({ score, wave, isMultiplayer, teamPlayers, typingStats = [], onReturnMenu, onReturnLobby }) {
   const handleReturn = () => {
     GameAudio.play('click');
     onReturnMenu();
@@ -50,6 +50,8 @@ export default function GameOver({ score, wave, isMultiplayer, teamPlayers, onRe
           position: 'relative',
           maxWidth: '500px',
           width: '90%',
+          maxHeight: '90vh',
+          overflowY: 'auto',
           background: 'rgba(5, 5, 8, 0.98)',
           border: '1px solid rgba(255, 255, 255, 0.08)',
           padding: '2.5rem 1.8rem',
@@ -157,6 +159,73 @@ export default function GameOver({ score, wave, isMultiplayer, teamPlayers, onRe
               Thank you, now your friends are safe.
             </div>
 
+            {typingStats && typingStats.length > 0 && (
+              <div style={{ marginTop: '1.5rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '1.2rem', textAlign: 'left', marginBottom: '1.5rem' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '1.2rem', fontFamily: 'var(--font-display)', opacity: 0.6, textAlign: 'center' }}>
+                  TYPING DIAGNOSTICS
+                </div>
+                {typingStats.map((pStat) => (
+                  <div key={pStat.socketId} style={{ 
+                    background: 'rgba(255, 255, 255, 0.01)', 
+                    border: '1px solid rgba(255, 255, 255, 0.05)',
+                    borderRadius: '4px',
+                    padding: '0.9rem',
+                    marginBottom: '0.8rem',
+                    textAlign: 'left'
+                  }}>
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      borderBottom: '1px solid rgba(255, 255, 255, 0.06)', 
+                      paddingBottom: '0.4rem', 
+                      marginBottom: '0.6rem',
+                      fontFamily: 'var(--font-display)',
+                      fontSize: '0.85rem',
+                      letterSpacing: '1px'
+                    }}>
+                      <span style={{ color: pStat.color ? `var(--neon-${pStat.color})` : '#ffffff', fontWeight: 'bold' }}>
+                        {pStat.username}
+                      </span>
+                      <span style={{ color: 'var(--neon-blue)' }}>
+                        {pStat.correctStrikes * 10} PTS
+                      </span>
+                    </div>
+                    
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem 1rem', fontSize: '0.8rem', fontFamily: 'var(--font-body)' }}>
+                      <div>
+                        <span style={{ color: 'var(--text-secondary)' }}>Speed:</span>{' '}
+                        <strong style={{ color: '#ffffff' }}>{pStat.wpm} WPM</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-secondary)' }}>Accuracy:</span>{' '}
+                        <strong style={{ color: '#a3e635' }}>{pStat.accuracy}%</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-secondary)' }}>Strikes:</span>{' '}
+                        <strong style={{ color: 'var(--neon-blue)' }}>{pStat.correctStrikes}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-secondary)' }}>Typos:</span>{' '}
+                        <strong style={{ color: 'var(--neon-red)' }}>{pStat.typos}</strong>
+                      </div>
+                      <div style={{ gridColumn: 'span 2', borderTop: '1px dotted rgba(255, 255, 255, 0.05)', paddingTop: '0.4rem', marginTop: '0.2rem' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>Longest Word:</span>{' '}
+                        <strong style={{ color: '#f59e0b', fontFamily: 'monospace' }}>
+                          {pStat.longestWord || 'None'}
+                        </strong>
+                      </div>
+                      <div style={{ gridColumn: 'span 2' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>Favorite Word:</span>{' '}
+                        <strong style={{ color: '#c084fc', fontFamily: 'monospace' }}>
+                          {pStat.favoriteWord || 'None'}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {renderActionButtons('Return to Main Menu to Start Over')}
           </>
         ) : (
@@ -181,22 +250,89 @@ export default function GameOver({ score, wave, isMultiplayer, teamPlayers, onRe
               </div>
             </div>
 
-            {isMultiplayer && teamPlayers && teamPlayers.length > 0 && (
-              <div style={{ marginTop: '2.5rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '1.5rem' }}>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '1.2rem', fontFamily: 'var(--font-display)', opacity: 0.6 }}>
-                  CO-OP SQUAD REPORTS
+            {typingStats && typingStats.length > 0 ? (
+              <div style={{ marginTop: '1.5rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '1.2rem', textAlign: 'left' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '1.2rem', fontFamily: 'var(--font-display)', opacity: 0.6, textAlign: 'center' }}>
+                  TYPING DIAGNOSTICS
                 </div>
-                {teamPlayers.map((player) => (
-                  <div key={player.socketId} className="defeat-divider-row" style={{ padding: '0.6rem 0.5rem', fontSize: '0.9rem' }}>
-                    <span style={{ color: `var(--neon-${player.color})` }}>
-                      {player.username}
-                    </span>
-                    <span style={{ color: 'var(--neon-blue)' }}>
-                      {player.score.toLocaleString()} PTS
-                    </span>
+                {typingStats.map((pStat) => (
+                  <div key={pStat.socketId} style={{ 
+                    background: 'rgba(255, 255, 255, 0.01)', 
+                    border: '1px solid rgba(255, 255, 255, 0.05)',
+                    borderRadius: '4px',
+                    padding: '0.9rem',
+                    marginBottom: '0.8rem',
+                    textAlign: 'left'
+                  }}>
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      borderBottom: '1px solid rgba(255, 255, 255, 0.06)', 
+                      paddingBottom: '0.4rem', 
+                      marginBottom: '0.6rem',
+                      fontFamily: 'var(--font-display)',
+                      fontSize: '0.85rem',
+                      letterSpacing: '1px'
+                    }}>
+                      <span style={{ color: pStat.color ? `var(--neon-${pStat.color})` : '#ffffff', fontWeight: 'bold' }}>
+                        {pStat.username}
+                      </span>
+                      <span style={{ color: 'var(--neon-blue)' }}>
+                        {pStat.correctStrikes * 10} PTS
+                      </span>
+                    </div>
+                    
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem 1rem', fontSize: '0.8rem', fontFamily: 'var(--font-body)' }}>
+                      <div>
+                        <span style={{ color: 'var(--text-secondary)' }}>Speed:</span>{' '}
+                        <strong style={{ color: '#ffffff' }}>{pStat.wpm} WPM</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-secondary)' }}>Accuracy:</span>{' '}
+                        <strong style={{ color: '#a3e635' }}>{pStat.accuracy}%</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-secondary)' }}>Strikes:</span>{' '}
+                        <strong style={{ color: 'var(--neon-blue)' }}>{pStat.correctStrikes}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-secondary)' }}>Typos:</span>{' '}
+                        <strong style={{ color: 'var(--neon-red)' }}>{pStat.typos}</strong>
+                      </div>
+                      <div style={{ gridColumn: 'span 2', borderTop: '1px dotted rgba(255, 255, 255, 0.05)', paddingTop: '0.4rem', marginTop: '0.2rem' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>Longest Word:</span>{' '}
+                        <strong style={{ color: '#f59e0b', fontFamily: 'monospace' }}>
+                          {pStat.longestWord || 'None'}
+                        </strong>
+                      </div>
+                      <div style={{ gridColumn: 'span 2' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>Favorite Word:</span>{' '}
+                        <strong style={{ color: '#c084fc', fontFamily: 'monospace' }}>
+                          {pStat.favoriteWord || 'None'}
+                        </strong>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
+            ) : (
+              isMultiplayer && teamPlayers && teamPlayers.length > 0 && (
+                <div style={{ marginTop: '2.5rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '1.5rem' }}>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '1.2rem', fontFamily: 'var(--font-display)', opacity: 0.6 }}>
+                    CO-OP SQUAD REPORTS
+                  </div>
+                  {teamPlayers.map((player) => (
+                    <div key={player.socketId} className="defeat-divider-row" style={{ padding: '0.6rem 0.5rem', fontSize: '0.9rem' }}>
+                      <span style={{ color: `var(--neon-${player.color})` }}>
+                        {player.username}
+                      </span>
+                      <span style={{ color: 'var(--neon-blue)' }}>
+                        {player.score.toLocaleString()} PTS
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )
             )}
 
             {renderActionButtons('Return to command')}

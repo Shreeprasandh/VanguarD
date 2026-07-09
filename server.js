@@ -622,6 +622,23 @@ wss.on('connection', (ws) => {
               playerId: data.playerId
             }, socketId);
           }
+        }
+
+        case 'TYPING_STATS_SHARE': {
+          if (player.roomId) {
+            sendToRoom(player.roomId, {
+              type: 'TYPING_STATS_SHARE',
+              playerId: socketId,
+              username: data.username,
+              color: data.color,
+              wpm: data.wpm,
+              accuracy: data.accuracy,
+              typos: data.typos,
+              correctStrikes: data.correctStrikes,
+              longestWord: data.longestWord,
+              favoriteWord: data.favoriteWord
+            }, socketId);
+          }
           break;
         }
 
