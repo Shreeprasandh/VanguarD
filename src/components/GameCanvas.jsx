@@ -2241,6 +2241,98 @@ export default function GameCanvas({
       }
     }
 
+    // Main boss custom behaviors
+    if (state.waveState === 'boss_fight' && state.bossObj && state.bossObj.type === 'boss') {
+      const boss = state.bossObj;
+      const bossTier = state.wave;
+
+      if (isHost) {
+        // 1. Dreadnought Sentinel (Wave 10): Bullet Burst Fire
+        if (bossTier === 10) {
+          boss.burstTimer = (boss.burstTimer || 0) + 1;
+          if (boss.burstTimer >= 480) { // ~8 seconds
+            boss.burstTimer = 0;
+            triggerDreadnoughtBurst();
+          }
+        }
+
+        // 2. Chronos Dominator (Wave 20): Time Warp (temporary speed boost)
+        if (bossTier === 20) {
+          boss.timeWarpTimer = (boss.timeWarpTimer || 0) + 1;
+          if (boss.timeWarpActive) {
+            boss.timeWarpDuration -= 1;
+            if (boss.timeWarpDuration <= 0) {
+              boss.timeWarpActive = false;
+              // Reset speed multipliers of all active enemies/bullets
+              state.enemies.forEach(e => { if (e.originalSpeed) { e.speed = e.originalSpeed; delete e.originalSpeed; } });
+              state.bullets.forEach(b => { if (b.originalSpeed) { b.speed = b.originalSpeed; delete b.originalSpeed; } });
+            }
+          } else if (boss.timeWarpTimer >= 600) { // ~10 seconds
+            boss.timeWarpTimer = 0;
+            boss.timeWarpActive = true;
+            boss.timeWarpDuration = 180; // 3 seconds of speed warp
+            GameAudio.play('warning'); // play alert
+            // Double speed of all active enemies and bullets
+            state.enemies.forEach(e => {
+              if (e.speed > 0) {
+                e.originalSpeed = e.speed;
+                e.speed *= 2.0;
+              }
+            });
+            state.bullets.forEach(b => {
+              b.originalSpeed = b.speed;
+              b.speed *= 2.0;
+            });
+          }
+        }
+
+        // 3. Plasma Leviathan (Wave 30): Spawn Shield Linkers
+        if (bossTier === 30) {
+          boss.linkerTimer = (boss.linkerTimer || 0) + 1;
+          if (boss.linkerTimer >= 540) { // ~9 seconds
+            boss.linkerTimer = 0;
+            spawnLeviathanLinker();
+          }
+        }
+
+        // 4. Hyperion Carrier (Wave 40): Launch Fighter Swarm
+        if (bossTier === 40) {
+          boss.swarmTimer = (boss.swarmTimer || 0) + 1;
+          if (boss.swarmTimer >= 600) { // ~10 seconds
+            boss.swarmTimer = 0;
+            launchFighterSwarm();
+          }
+        }
+
+        // 5. Singularity Void (Wave 50): Gravity vortex pull
+        if (bossTier === 50) {
+          boss.pullTimer = (boss.pullTimer || 0) + 1;
+          if (boss.pullTimer >= 480) { // ~8 seconds
+            boss.pullTimer = 0;
+            triggerSingularityPull();
+          }
+        }
+
+        // 6. Void Emperor (Wave 100+): Doomsday Countdown
+        if (bossTier >= 100) {
+          boss.doomsdayTimer = (boss.doomsdayTimer || 0) + 1;
+          if (boss.doomsdayActive) {
+            boss.doomsdayCountdown -= 16.7; // milliseconds (roughly 60fps)
+            if (boss.doomsdayCountdown <= 0) {
+              boss.doomsdayActive = false;
+              boss.doomsdayTimer = 0;
+              triggerVoidDoomsdayBlast();
+            }
+          } else if (boss.doomsdayTimer >= 900) { // ~15 seconds
+            boss.doomsdayTimer = 0;
+            boss.doomsdayActive = true;
+            boss.doomsdayCountdown = 10000; // 10 seconds countdown
+            GameAudio.play('warning');
+          }
+        }
+      }
+    }
+
     // Mini-boss custom behaviors
     if (state.waveState === 'boss_fight' && state.bossObj && state.bossObj.type === 'mini_boss') {
       const boss = state.bossObj;
@@ -2365,23 +2457,30 @@ export default function GameCanvas({
       }
     }
 
-    // Shield Linker behavior: link to another enemy ship
+    // Shield Linker behavior: link to another enemy ship (or boss active shield)
     state.enemies.forEach(e => { e.isInvulnerable = false; });
     state.enemies.forEach(e => {
       if (e.type === 'shield_linker') {
         if (!isMultiplayer || isHost) {
           if (!e.hasLinkedOnce) {
-            // Find a target that is drone or interceptor (elite)
-            const candidates = state.enemies.filter(cand => 
-              cand.id !== e.id && 
-              (cand.type === 'drone' || cand.type === 'interceptor')
-            );
-            if (candidates.length > 0) {
-              e.shieldLinkedEnemyId = candidates[Math.floor(Math.random() * candidates.length)].id;
+            // Prioritize boss shield first if present!
+            const bossShield = state.enemies.find(cand => cand.type === 'boss_shield');
+            if (bossShield) {
+              e.shieldLinkedEnemyId = bossShield.id;
               e.hasLinkedOnce = true;
               GameAudio.play('shield_activate');
             } else {
-              e.shieldLinkedEnemyId = null;
+              const candidates = state.enemies.filter(cand => 
+                cand.id !== e.id && 
+                (cand.type === 'drone' || cand.type === 'interceptor')
+              );
+              if (candidates.length > 0) {
+                e.shieldLinkedEnemyId = candidates[Math.floor(Math.random() * candidates.length)].id;
+                e.hasLinkedOnce = true;
+                GameAudio.play('shield_activate');
+              } else {
+                e.shieldLinkedEnemyId = null;
+              }
             }
           }
         }
@@ -3610,6 +3709,160 @@ export default function GameCanvas({
     }
   };
 
+  // 1. Dreadnought Sentinel (Wave 10) Burst Shot
+  const triggerDreadnoughtBurst = () => {
+    const state = stateRef.current;
+    if (!state.bossObj) return;
+    let delay = 0;
+    for (let i = 0; i < 3; i++) {
+      setTimeout(() => {
+        if (stateRef.current.waveState === 'boss_fight' && stateRef.current.bossObj && !stateRef.current.isLocalGameOver) {
+          fireBossBullet();
+        }
+      }, delay);
+      delay += 350; // 0.35s delay between burst shots
+    }
+  };
+
+  // 2. Plasma Leviathan (Wave 30) Shield Linker
+  const spawnLeviathanLinker = () => {
+    const state = stateRef.current;
+    const canvas = canvasRef.current;
+    if (!canvas || !state.bossObj) return;
+    
+    // Spawn 1 shield linker minion on left or right of the boss
+    const x = Math.random() < 0.5 ? state.bossObj.x - 120 : state.bossObj.x + 120;
+    const id = `leviathan-linker-${Math.random().toString(36).substring(2, 9)}`;
+    const word = getWordForEnemy('shield_linker', state.wave, state.usedWords);
+    
+    // Determine color
+    let color = shipColor;
+    if (isMultiplayer && state.players) {
+      const colors = state.players.map(p => p.color).filter(Boolean);
+      if (colors.length > 0) {
+        color = colors[Math.floor(Math.random() * colors.length)];
+      }
+    }
+    
+    const minion = {
+      id,
+      word,
+      color,
+      x,
+      y: state.bossObj.y + 40,
+      speed: 0.28,
+      targetIndex: 0,
+      type: 'shield_linker',
+      dirMultiplier: Math.random() < 0.5 ? 1 : -1
+    };
+    
+    state.enemies.push(minion);
+    
+    if (isMultiplayer && socket) {
+      socket.send(JSON.stringify({
+        type: 'SPAWN_ENEMIES',
+        enemies: [{
+          ...minion,
+          x: minion.x / canvas.width,
+          y: minion.y / canvas.height,
+          speed: minion.speed / canvas.height
+        }],
+        hostId: socket.id
+      }));
+    }
+  };
+
+  // 3. Hyperion Carrier (Wave 40) Fighter Swarm
+  const launchFighterSwarm = () => {
+    const state = stateRef.current;
+    const canvas = canvasRef.current;
+    if (!canvas || !state.bossObj) return;
+    
+    // Launch 3 fast interceptors from the carrier decks!
+    const offsets = [-80, 0, 80];
+    const swarm = [];
+    
+    offsets.forEach((ox, idx) => {
+      const id = `swarm-${idx}-${Math.random().toString(36).substring(2, 9)}`;
+      const x = Math.max(80, Math.min(canvas.width - 80, state.bossObj.x + ox));
+      const word = getWordForEnemy('interceptor', state.wave, state.usedWords);
+      
+      let color = shipColor;
+      if (isMultiplayer && state.players) {
+        const colors = state.players.map(p => p.color).filter(Boolean);
+        if (colors.length > 0) {
+          color = colors[idx % colors.length] || shipColor;
+        }
+      }
+      
+      const minion = {
+        id,
+        word,
+        color,
+        x,
+        y: state.bossObj.y + 40,
+        speed: 1.25, // Fast interceptor speed
+        targetIndex: 0,
+        type: 'interceptor',
+        dirMultiplier: ox < 0 ? -1 : 1
+      };
+      
+      state.enemies.push(minion);
+      swarm.push(minion);
+    });
+    
+    GameAudio.play('laser'); // Swarm launch sound
+    
+    if (isMultiplayer && socket) {
+      const normalizedSwarm = swarm.map(m => ({
+        ...m,
+        x: m.x / canvas.width,
+        y: m.y / canvas.height,
+        speed: m.speed / canvas.height
+      }));
+      socket.send(JSON.stringify({
+        type: 'SPAWN_ENEMIES',
+        enemies: normalizedSwarm,
+        hostId: socket.id
+      }));
+    }
+  };
+
+  // 4. Singularity Void (Wave 50) Gravity Vortex Pull
+  const triggerSingularityPull = () => {
+    const state = stateRef.current;
+    const canvas = canvasRef.current;
+    if (!canvas || !state.bossObj) return;
+    
+    GameAudio.play('warning'); 
+    
+    // Gravitational Pull: Pull all active enemies and bullets X coordinates towards center
+    state.enemies.forEach(e => {
+      if (e.type !== 'boss' && e.type !== 'boss_shield') {
+        const dx = (canvas.width / 2) - e.x;
+        e.x += dx * 0.7; // Pull 70% of the way to center
+        createExplosion(e.x, e.y, '#c084fc', 4);
+      }
+    });
+    
+    state.bullets.forEach(b => {
+      const dx = (canvas.width / 2) - b.x;
+      b.x += dx * 0.7;
+    });
+    
+    createExplosion(canvas.width / 2, canvas.height * 0.45, '#c084fc', 35, true);
+  };
+
+  // 5. Void Emperor (Wave 100+) Doomsday Blast
+  const triggerVoidDoomsdayBlast = () => {
+    const state = stateRef.current;
+    if (state.waveState !== 'boss_fight' || !state.bossObj) return;
+    
+    takeDamage(40);
+    GameAudio.play('explosionLarge');
+    createExplosion(window.innerWidth / 2, window.innerHeight / 2, '#ef4444', 50, true);
+  };
+
   // Boss spawns normal colored minions
   const spawnBossMinions = () => {
     const state = stateRef.current;
@@ -3862,6 +4115,8 @@ export default function GameCanvas({
       // Update boss general health percentage
       if (state.wave >= 100) {
         boss.health = 100;
+        boss.doomsdayActive = false; // Cancel doomsday weapon charging
+        boss.doomsdayTimer = 0;
         // Spark explosion on boss
         createExplosion(boss.x, boss.y, getColorHex(boss.words[shieldIndex].color), 30, true);
         
@@ -4502,6 +4757,14 @@ export default function GameCanvas({
       ctx.font = '700 12px Orbitron, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText(bossLabel, 0, -boss.height / 2 - 35);
+
+      // Render Doomsday countdown warning text
+      if (boss.doomsdayActive && boss.doomsdayCountdown > 0) {
+        ctx.fillStyle = '#ef4444';
+        ctx.font = '800 11px Orbitron, sans-serif';
+        const secondsLeft = (boss.doomsdayCountdown / 1000).toFixed(1);
+        ctx.fillText(`DOOMSDAY BLAST IN ${secondsLeft}s!`, 0, -boss.height / 2 - 50);
+      }
 
       // Boss forcefield bubble
       const hitElapsed = Date.now() - (boss.lastHitTime || 0);
