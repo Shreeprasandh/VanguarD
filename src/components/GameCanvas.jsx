@@ -2150,10 +2150,10 @@ export default function GameCanvas({
     });
     state.particles = state.particles.filter(p => p.life > 0);
 
-    // If Wave Intro
-    if (state.waveState === 'intro') {
+    // If Wave Intro or Boss Warning
+    if (state.waveState === 'intro' || state.waveState === 'boss_warning') {
       state.waveTransitionTimer -= 1;
-      if (state.waveTransitionTimer <= 0) {
+      if (state.waveTransitionTimer <= 0 && state.waveState === 'intro') {
         state.waveState = 'playing';
         state.meteorShowerTriggered = false; // Reset meteor shower status
         state.lastSpawnTime = Date.now(); // Reset spawn timing on intro end to give clients sync headroom
@@ -2163,7 +2163,17 @@ export default function GameCanvas({
           }
         }
       }
-      return; // Skip spawning and enemy progression during intro banner
+      if (state.waveState === 'intro') {
+        return; // Skip spawning and enemy progression during intro banner
+      }
+    }
+
+    // Handle Meteor warning timer countdown for all players (host & clients)
+    if (state.meteorShowerWarningTimer && state.meteorShowerWarningTimer > 0) {
+      state.meteorShowerWarningTimer -= 1;
+      if (state.meteorShowerWarningTimer <= 0 && isHost) {
+        spawnMeteors();
+      }
     }
 
     // Spawning Enemies (Authoritative Host generates spawns in co-op)
@@ -2180,14 +2190,6 @@ export default function GameCanvas({
               type: 'METEOR_WARNING'
             }));
           }
-        }
-      }
-
-      // Handle Meteor warning timer countdown
-      if (state.meteorShowerWarningTimer && state.meteorShowerWarningTimer > 0) {
-        state.meteorShowerWarningTimer -= 1;
-        if (state.meteorShowerWarningTimer <= 0) {
-          spawnMeteors();
         }
       }
 
@@ -2940,7 +2942,7 @@ export default function GameCanvas({
       if (state.waveState === 'boss_warning') {
         tempo = 1.15;
         volume = 0.85;
-      } else if (state.meteorShowerTimer > 0) {
+      } else if (state.meteorShowerWarningTimer > 0) {
         tempo = 1.12;
         volume = 0.78;
       } else if (state.streak >= 40) {
@@ -3308,7 +3310,23 @@ export default function GameCanvas({
     const players = state.players || [];
     // Generate boss sequence words
     // Co-op boss contains cycling colored words
-    const wordCount = 3 + Math.floor(state.wave / 2);
+    const getBossWordCount = (waveNum) => {
+      switch (waveNum) {
+        case 10: return 6;
+        case 20: return 8;
+        case 30: return 12;
+        case 40: return 15;
+        case 50: return 18;
+        case 100: return 53;
+        default:
+          if (waveNum > 50 && waveNum < 100) {
+            // Smoothly interpolate between 18 (wave 50) and 53 (wave 100)
+            return 18 + Math.floor((waveNum - 50) * 0.7);
+          }
+          return 3 + Math.floor(waveNum / 2);
+      }
+    };
+    const wordCount = getBossWordCount(state.wave);
     let bossWords = [];
     if (isMultiplayer) {
       const activeColors = getActivePlayerColors();
