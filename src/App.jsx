@@ -12,6 +12,7 @@ import FeedbackModal from './components/FeedbackModal';
 import DockingStation from './components/DockingStation';
 import InfoPopup from './components/InfoPopup';
 import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { loginPilot, registerPilot, saveCheckpoint, saveHighScore, supabase } from './game/supabase';
 import { initDictionary } from './game/words';
 
@@ -1314,6 +1315,7 @@ export default function App() {
       {/* Subtle Screen Fade Transition Overlay */}
       <div className={`fade-transition-overlay ${transitionState}`} />
       <Analytics />
+      <SpeedInsights />
     </div>
   );
 }
