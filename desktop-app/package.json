@@ -6,7 +6,7 @@
   "scripts": {
     "build": "npx vite build --config vite.desktop.config.js",
     "start": "electron .",
-    "package": "npm run build && electron-packager . VanguarDZ --platform=win32 --arch=x64 --out=release --overwrite",
+    "package": "npm run build && electron-packager . VanguarDZ --platform=win32 --arch=x64 --out=release --overwrite --ignore=release",
     "installer": "npm run package && node build-installer.js"
   },
   "dependencies": {},
