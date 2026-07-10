@@ -13,7 +13,7 @@ import DockingStation from './components/DockingStation';
 import InfoPopup from './components/InfoPopup';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
-import { loginPilot, registerPilot, saveCheckpoint, saveHighScore, supabase } from './game/supabase';
+import { loginPilot, registerPilot, saveCheckpoint, saveHighScore, supabase, getLeaderboard } from './game/supabase';
 import { initDictionary } from './game/words';
 
 export default function App() {
@@ -677,6 +677,19 @@ export default function App() {
     GameAudio.play('click');
   };
 
+  const handleOpenLeaderboard = () => {
+    setShowLeaderboard(true);
+    getLeaderboard()
+      .then(data => {
+        if (data && data.length > 0) {
+          setLeaderboard(data);
+        }
+      })
+      .catch(err => {
+        console.error('Failed to load leaderboard from Supabase:', err);
+      });
+  };
+
   const handleStartSolo = (startingWave = 1) => {
     setIsMultiplayer(false);
     setGameStats({ score: 0, wave: startingWave });
@@ -825,7 +838,7 @@ export default function App() {
             onStartSolo={handleStartSolo}
             onCreateRoom={handleCreateRoom}
             onJoinRoom={handleJoinRoom}
-            onOpenLeaderboard={() => setShowLeaderboard(true)}
+            onOpenLeaderboard={handleOpenLeaderboard}
             onOpenEditProfile={() => setShowEditProfile(true)}
             onOpenStory={() => setShowStory(true)}
             onOpenFeedback={() => setShowFeedback(true)}

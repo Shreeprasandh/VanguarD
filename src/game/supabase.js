@@ -162,3 +162,26 @@ export async function submitFeedback(username, feedbackText) {
     throw new Error(error.message);
   }
 }
+
+export async function getLeaderboard() {
+  if (!supabase) {
+    throw new Error('Supabase client is not initialized.');
+  }
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('username, high_score')
+    .not('high_score', 'is', null)
+    .order('high_score', { ascending: false })
+    .limit(10);
+
+  if (error) {
+    console.error('Supabase getLeaderboard error:', error);
+    return [];
+  }
+
+  return data.map(p => ({
+    username: p.username,
+    score: p.high_score || 0
+  }));
+}
