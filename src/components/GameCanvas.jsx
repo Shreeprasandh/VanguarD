@@ -905,7 +905,7 @@ export default function GameCanvas({
                   }
                   state.bossObj.empTimer = data.boss.empTimer;
                 }
-              } else if (!data.boss && state.bossObj) {
+              } else if (!data.boss && state.bossObj && state.waveState !== 'boss_fight' && state.waveState !== 'boss_warning') {
                 state.bossObj = null;
                 state.enemies = state.enemies.filter(e => e.type !== 'boss_shield');
               }
@@ -3409,7 +3409,7 @@ export default function GameCanvas({
       letter,
       x: cruiser.x,
       y: cruiser.y + 15,
-      speed: 1.5,
+      speed: 1.125, // reduced by 25% from 1.5
       damage: 15 // Cruiser bullet damage: 15
     };
 
@@ -3688,7 +3688,7 @@ export default function GameCanvas({
       angles.forEach((angle, idx) => {
         const bId = bulletId + '-' + idx;
         const bLetter = alphabet[Math.floor(Math.random() * alphabet.length)];
-        const bSpeed = 2.2;
+        const bSpeed = 1.65; // reduced by 25% from 2.2
         
         const bulletObj = {
           id: bId,
@@ -3726,7 +3726,7 @@ export default function GameCanvas({
     } else {
       // Standard or Chronos Temporal Bullet
       const isTemporal = state.wave === 20;
-      const bSpeed = isTemporal ? 1.4 : 1.8;
+      const bSpeed = isTemporal ? 1.05 : 1.35; // reduced by 25% from 1.4 : 1.8
       
       const bullet = {
         id: bulletId,
