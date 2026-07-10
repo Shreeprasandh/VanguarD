@@ -811,12 +811,17 @@ export default function App() {
 
   const handleDownloadInstaller = () => {
     GameAudio.play('click');
-    const link = document.createElement('a');
-    link.href = '/VanguarDZ-Setup.exe';
-    link.download = 'VanguarDZ-Setup.exe';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const downloadUrl = import.meta.env.VITE_DOWNLOAD_URL || '/VanguarDZ-Setup.exe';
+    if (downloadUrl.startsWith('http')) {
+      window.open(downloadUrl, '_blank');
+    } else {
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = 'VanguarDZ-Setup.exe';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   };
 
   // Render logic helper
