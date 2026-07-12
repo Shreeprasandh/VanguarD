@@ -2156,10 +2156,8 @@ export default function GameCanvas({
       });
 
       if (state.dockingTimer <= 0) {
-        // Reset timers and launch parent docked UI selection
-        state.waveState = 'intro';
-        state.dockingShipYOffset = 0;
-        state.hasPuffedSteam = false;
+        // Set state to docked and launch parent docked UI selection
+        state.waveState = 'docked';
         onDockStart(state.wave);
       }
       return;
@@ -3599,15 +3597,19 @@ export default function GameCanvas({
       }
     }
 
-    // Mini-boss contains a single large target word representing its specific design
-    const bossWords = [{
-      id: 'boss-w-0',
-      word: getWordForEnemy('boss', state.wave, state.usedWords),
-      color: miniBossColor,
-      active: true,
-      completed: false,
-      targetIndex: 0
-    }];
+    // Mini-boss contains target word(s) representing its specific design. Wave 5 has 2 words.
+    const wordCount = state.wave === 5 ? 2 : 1;
+    const bossWords = [];
+    for (let i = 0; i < wordCount; i++) {
+      bossWords.push({
+        id: `boss-w-${i}`,
+        word: getWordForEnemy('boss', state.wave, state.usedWords),
+        color: miniBossColor,
+        active: i === 0,
+        completed: false,
+        targetIndex: 0
+      });
+    }
 
     state.waveState = 'boss_fight';
     state.bossObj = {
@@ -5779,7 +5781,7 @@ export default function GameCanvas({
       players.forEach(p => {
         const sx = state.playerPositions[p.socketId] || getShipTargetX(p.socketId, canvas.width);
         let sy = canvas.height - 80;
-        if (state.waveState === 'docking') {
+        if (state.waveState === 'docking' || state.waveState === 'docked') {
           sy -= state.dockingShipYOffset;
         } else if (state.waveState === 'intro' && state.waveTransitionTimer > 30) {
           const delay = p.isHost ? 0 : 20;
@@ -5815,7 +5817,7 @@ export default function GameCanvas({
     } else {
       // Draw single solo player ship
       let sy = canvas.height - 80;
-      if (state.waveState === 'docking') {
+      if (state.waveState === 'docking' || state.waveState === 'docked') {
         sy -= state.dockingShipYOffset;
       } else if (state.waveState === 'intro' && state.waveTransitionTimer > 30) {
         const activeTimer = state.waveTransitionTimer - 30;
@@ -5828,7 +5830,7 @@ export default function GameCanvas({
     }
 
     // Render Docking Space Station Hangar visual overlays
-    if (state.waveState === 'docking') {
+    if (state.waveState === 'docking' || state.waveState === 'docked') {
       ctx.save();
       // Draw massive space station hangar hull (low opacity vector lines)
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
@@ -5857,7 +5859,7 @@ export default function GameCanvas({
 
         // Alignment guide lasers (thin dashed cyan)
         if (state.dockingShipYOffset > 80) {
-          ctx.strokeStyle = 'rgba(6, 182, 212, 0.4)';
+          ctx.strokeStyle = 'rgba(6, 182, 212, 0.22)';
           ctx.lineWidth = 1.0;
           ctx.setLineDash([4, 4]);
           ctx.beginPath();
