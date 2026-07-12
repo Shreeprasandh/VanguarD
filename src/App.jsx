@@ -1478,8 +1478,12 @@ export default function App() {
 
       {/* Subtle Screen Fade Transition Overlay */}
       <div className={`fade-transition-overlay ${transitionState}`} />
-      <Analytics />
-      <SpeedInsights />
+      {window.location.hostname.includes('vercel') && (
+        <>
+          <Analytics />
+          <SpeedInsights />
+        </>
+      )}
     </div>
   );
 }

@@ -165,7 +165,7 @@ export const WORDS_EXPERT_RARE = [
 
 export async function initDictionary() {
   try {
-    const response = await fetch('/dictionary.txt');
+    const response = await fetch('./dictionary.txt');
     if (!response.ok) throw new Error('Fetch failed');
     const text = await response.text();
     const words = text.split('\n').map(w => w.trim().toLowerCase()).filter(Boolean);
