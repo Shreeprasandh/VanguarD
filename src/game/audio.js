@@ -26,7 +26,7 @@ class AudioManager {
     this.activeMusicTheme = 'ingame';
     this.tempoTarget = 1.0;
     this.tempoCurrent = 1.0;
-    this.volumeTarget = 0.7;
+    this.volumeTarget = 0.8;
     
     // File paths relative to public directory
     this.soundPaths = {
@@ -1022,7 +1022,7 @@ class AudioManager {
       
       this.tempoCurrent = 1.0;
       this.tempoTarget = 1.0;
-      this.volumeTarget = 0.7;
+      this.volumeTarget = 0.8;
 
       // Master Gain for in-game theme to allow smooth transitions
       this.ingameMasterGain = ctx.createGain();
@@ -1296,7 +1296,7 @@ class AudioManager {
     this.activeMusicTheme = 'ingame';
     this.tempoTarget = 1.0;
     this.tempoCurrent = 1.0;
-    this.volumeTarget = 0.7;
+    this.volumeTarget = 0.8;
 
     if (this.currentTrack === 'ingame_synth') {
       this.currentTrack = null;

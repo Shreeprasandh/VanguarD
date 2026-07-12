@@ -3270,7 +3270,7 @@ export default function GameCanvas({
       } else if (isKamikazeWave && rng > 0.70 - kamikazeChance && rng <= 0.70) {
         type = 'kamikaze';
         const waveScale = Math.min(1.0, (state.wave - 5) / 20); // 0.0 at wave 5, scaling to 1.0 at wave 25+
-        speed = ((0.7 + waveScale * 0.6) + Math.random() * (0.2 + waveScale * 0.1)) * 0.8; // Speed reduced by 20%
+        speed = ((0.7 + waveScale * 0.6) + Math.random() * (0.2 + waveScale * 0.1)) * 0.9; // Speed reduced by 10%
       } else if (state.wave >= 3 && rng > 0.70 - kamikazeChance - 0.22 && rng <= 0.70 - kamikazeChance) {
         type = 'interceptor'; // Elite
         speed = 0.9 + Math.random() * 0.4;
