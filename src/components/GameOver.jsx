@@ -187,7 +187,7 @@ export default function GameOver({ score, wave, isMultiplayer, teamPlayers, typi
                         {pStat.username}
                       </span>
                       <span style={{ color: 'var(--neon-blue)' }}>
-                        {pStat.correctStrikes * 10} PTS
+                        {(pStat.score !== undefined ? pStat.score : pStat.correctStrikes * 10).toLocaleString()} PTS
                       </span>
                     </div>
                     
@@ -278,7 +278,7 @@ export default function GameOver({ score, wave, isMultiplayer, teamPlayers, typi
                         {pStat.username}
                       </span>
                       <span style={{ color: 'var(--neon-blue)' }}>
-                        {pStat.correctStrikes * 10} PTS
+                        {(pStat.score !== undefined ? pStat.score : pStat.correctStrikes * 10).toLocaleString()} PTS
                       </span>
                     </div>
                     

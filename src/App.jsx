@@ -76,6 +76,7 @@ export default function App() {
   // Gameplay scoring caches
   const [gameStats, setGameStats] = useState({ score: 0, wave: 1 });
   const [bossShieldsCount, setBossShieldsCount] = useState(0);
+  const [accumulatedStats, setAccumulatedStats] = useState(null);
 
   const [isMobileDevice, setIsMobileDevice] = useState(false);
 
@@ -390,6 +391,7 @@ export default function App() {
               break;
 
             case 'GAME_STARTED': {
+              setAccumulatedStats(null);
               setPlayers(data.players);
               setGameStats({ score: 0, wave: 1 });
               if (data.maxPlayers) {
@@ -415,7 +417,6 @@ export default function App() {
 
             case 'INIT_DOCK':
               setGameStats(prev => ({ ...prev, wave: data.wave }));
-              changeScreenWithFade('docking');
               break;
 
             case 'LAUNCH_NEXT_WAVE':
@@ -730,12 +731,16 @@ export default function App() {
 
   const handleStartSolo = (startingWave = 1) => {
     setIsMultiplayer(false);
+    setAccumulatedStats(null);
     setGameStats({ score: 0, wave: startingWave });
     changeScreenWithFade('playing');
   };
 
-  const handleDockStart = (completedWave) => {
+  const handleDockStart = (completedWave, currentStats) => {
     setGameStats(prev => ({ ...prev, wave: completedWave }));
+    if (currentStats) {
+      setAccumulatedStats(currentStats);
+    }
     changeScreenWithFade('docking');
   };
 
@@ -837,6 +842,7 @@ export default function App() {
 
   const handleReturnMenu = () => {
     setBossShieldsCount(0);
+    setAccumulatedStats(null);
     if (isMultiplayer) {
       handleLeaveRoom();
     } else {
@@ -854,6 +860,7 @@ export default function App() {
   };
 
   const handleReturnLobby = () => {
+    setAccumulatedStats(null);
     changeScreenWithFade('lobby');
   };
 
@@ -933,6 +940,7 @@ export default function App() {
             onSaveCheckpoint={handleSaveCheckpoint}
             bossShieldsCount={bossShieldsCount}
             onBossShieldsChange={setBossShieldsCount}
+            initialStats={accumulatedStats}
           />
         );
 

@@ -33,7 +33,8 @@ export default function GameCanvas({
   onDockStart,
   onSaveCheckpoint,
   bossShieldsCount = 0,
-  onBossShieldsChange
+  onBossShieldsChange,
+  initialStats
 }) {
   const getColorHex = (colorName) => {
     if (colorName === 'red') return '#cf4042'; // Muted Crimson
@@ -110,10 +111,10 @@ export default function GameCanvas({
     bossShieldsCount: bossShieldsCount || 0,
     shieldClaims: [],
     players: players || [],
-    correctStrikes: 0,
-    totalTypos: 0,
-    gameStartTime: Date.now(),
-    completedWordsList: [],
+    correctStrikes: initialStats ? initialStats.correctStrikes : 0,
+    totalTypos: initialStats ? initialStats.totalTypos : 0,
+    gameStartTime: initialStats ? initialStats.gameStartTime : Date.now(),
+    completedWordsList: initialStats ? [...initialStats.completedWordsList] : [],
     teammateStats: {},
     isReviving: false,
     reviveTimeRemaining: 0
@@ -999,6 +1000,7 @@ export default function GameCanvas({
               socketId: data.playerId,
               username: data.username || 'Teammate',
               color: data.color || 'blue',
+              score: data.score || 0,
               wpm: data.wpm,
               accuracy: data.accuracy,
               typos: data.typos,
@@ -1013,6 +1015,17 @@ export default function GameCanvas({
                 state.isWaitingForStats = false;
                 setTimeout(state.compileAndFinishFn, 500);
               }
+            }
+            break;
+          }
+
+          case 'INIT_DOCK': {
+            if (state.waveState !== 'docking' && state.waveState !== 'docked') {
+              state.waveState = 'docking';
+              state.dockingTimer = 180;
+              state.dockingShipYOffset = 0;
+              state.hasPuffedSteam = false;
+              GameAudio.play('emp');
             }
             break;
           }
@@ -2165,7 +2178,12 @@ export default function GameCanvas({
       if (state.dockingTimer <= 0) {
         // Set state to docked and launch parent docked UI selection
         state.waveState = 'docked';
-        onDockStart(state.wave);
+        onDockStart(state.wave, {
+          correctStrikes: state.correctStrikes,
+          totalTypos: state.totalTypos,
+          completedWordsList: state.completedWordsList,
+          gameStartTime: state.gameStartTime
+        });
       }
       return;
     }
@@ -4153,6 +4171,7 @@ export default function GameCanvas({
       socketId: socket?.id || 'local',
       username: username || 'Player 1',
       color: shipColor || 'blue',
+      score: state.score,
       wpm: localWpm,
       accuracy: localAccuracy,
       typos: localTypos,
@@ -4170,6 +4189,7 @@ export default function GameCanvas({
         playerId: socket.id,
         username: username,
         color: shipColor,
+        score: state.score,
         wpm: localWpm,
         accuracy: localAccuracy,
         typos: localTypos,

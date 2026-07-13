@@ -579,6 +579,7 @@ wss.on('connection', (ws) => {
               playerId: socketId,
               username: data.username,
               color: data.color,
+              score: data.score,
               wpm: data.wpm,
               accuracy: data.accuracy,
               typos: data.typos,
