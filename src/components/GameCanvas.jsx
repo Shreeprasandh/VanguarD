@@ -238,10 +238,14 @@ export default function GameCanvas({
     // Start Game loop
     let animationFrameId;
     const render = () => {
-      if (!stateRef.current.isPaused) {
-        updateGame();
+      try {
+        if (!stateRef.current.isPaused) {
+          updateGame();
+        }
+        drawGame();
+      } catch (e) {
+        console.error("Game loop error:", e);
       }
-      drawGame();
       animationFrameId = requestAnimationFrame(render);
     };
     render();
@@ -420,6 +424,8 @@ export default function GameCanvas({
                   state.anomalyWarningTimer = 180;
                 }
               });
+              // Keep guest waveSpawnedCount in sync for host migration fallback
+              state.waveSpawnedCount += data.enemies.length;
             }
             break;
           }
@@ -2980,9 +2986,12 @@ export default function GameCanvas({
         }
       }
 
-      // Hit bottom check
+      // Hit bottom check or off-screen cleanup
       const thresholdY = canvas.height - 100;
-      if (bullet.y >= thresholdY) {
+      const isOffScreen = bullet.y < -50 || bullet.x < -50 || bullet.x > canvas.width + 50;
+      if (isOffScreen) {
+        state.bullets = state.bullets.filter(b => b.id !== bullet.id);
+      } else if (bullet.y >= thresholdY) {
         if (state.reflectorTime > 0) {
           // Reflect back to destroy the closest enemy
           if (state.enemies.length > 0) {

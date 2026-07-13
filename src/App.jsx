@@ -283,11 +283,13 @@ export default function App() {
 
     let socketOpen = false;
     let wakeupTimer = null;
+    let active = true;
 
     const connect = () => {
+      if (!active) return;
       if (wakeupTimer) clearTimeout(wakeupTimer);
       wakeupTimer = setTimeout(() => {
-        if (!socketOpen) {
+        if (active && !socketOpen) {
           setShowServerWakeup(true);
         }
       }, 1800);
@@ -311,6 +313,7 @@ export default function App() {
       socketRef.current = socket;
 
       socket.onopen = () => {
+        if (!active) return;
         console.log('WebSocket connected!');
         socketOpen = true;
         setSocketConnected(true);
@@ -325,6 +328,7 @@ export default function App() {
       };
 
       socket.onmessage = (event) => {
+        if (!active) return;
         try {
           const data = JSON.parse(event.data);
           switch (data.type) {
@@ -410,11 +414,14 @@ export default function App() {
       };
 
       socket.onclose = () => {
+        if (!active) return;
         console.log('WebSocket disconnected. Reconnecting in 3s...');
         socketOpen = false;
         setSocketConnected(false);
         if (wakeupTimer) clearTimeout(wakeupTimer);
-        setTimeout(connect, 3000);
+        setTimeout(() => {
+          if (active) connect();
+        }, 3000);
       };
 
       socket.onerror = (err) => {
@@ -425,8 +432,12 @@ export default function App() {
     connect();
 
     return () => {
+      active = false;
       if (wakeupTimer) clearTimeout(wakeupTimer);
-      if (socketRef.current) socketRef.current.close();
+      if (socketRef.current) {
+        socketRef.current.onclose = null;
+        socketRef.current.close();
+      }
     };
   }, []);
 
