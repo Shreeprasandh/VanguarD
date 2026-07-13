@@ -238,6 +238,7 @@ export default function GameCanvas({
     // Start Game loop
     let animationFrameId;
     const render = () => {
+      if (!canvasRef.current) return;
       try {
         if (!stateRef.current.isPaused) {
           updateGame();

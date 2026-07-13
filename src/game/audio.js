@@ -246,22 +246,6 @@ class AudioManager {
       }
     }
 
-    const originalConnect = GainNode.prototype.connect;
-    if (pan !== 0) {
-      GainNode.prototype.connect = function(destination) {
-        if (destination === this.context.destination) {
-          try {
-            const panner = this.context.createStereoPanner();
-            panner.pan.setValueAtTime(Math.max(-1.0, Math.min(1.0, pan)), this.context.currentTime);
-            originalConnect.call(this, panner);
-            originalConnect.call(panner, destination);
-            return panner;
-          } catch (e) {}
-        }
-        return originalConnect.apply(this, arguments);
-      };
-    }
-
     try {
       if (soundName === 'shield_activate') {
       if (this.muted) return;
@@ -804,10 +788,8 @@ class AudioManager {
           // Silently catch browser autoplay prevention errors
         });
       }
-    } finally {
-      if (pan !== 0) {
-        GainNode.prototype.connect = originalConnect;
-      }
+    } catch (e) {
+      console.warn("Fallback HTML5 audio playback failed:", e);
     }
   }
 

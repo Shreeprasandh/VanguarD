@@ -93,6 +93,21 @@ export default function App() {
 
   useEffect(() => {
     initDictionary();
+
+    const resumeAudio = () => {
+      const contexts = [GameAudio.sfxAudioCtx, GameAudio.menuAudioCtx, GameAudio.ingameAudioCtx];
+      contexts.forEach(ctx => {
+        if (ctx && ctx.state === 'suspended') {
+          ctx.resume().catch(() => {});
+        }
+      });
+    };
+    window.addEventListener('click', resumeAudio, { once: true });
+    window.addEventListener('keydown', resumeAudio, { once: true });
+    return () => {
+      window.removeEventListener('click', resumeAudio);
+      window.removeEventListener('keydown', resumeAudio);
+    };
   }, []);
 
   // Restore session from sessionStorage, local storage backup, or guest memory on mount
