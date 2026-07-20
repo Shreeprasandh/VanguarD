@@ -744,6 +744,13 @@ export default function App() {
     changeScreenWithFade('docking');
   };
 
+  const handleLoadoutChange = (color, skills) => {
+    setShipColor(color);
+    setEquippedSkills(skills);
+    localStorage.setItem('cybertype_color', color);
+    localStorage.setItem('cybertype_skills', JSON.stringify(skills));
+  };
+
   const handleDockContinue = (newColor, newSkills) => {
     setShipColor(newColor);
     setEquippedSkills(newSkills);
@@ -955,6 +962,7 @@ export default function App() {
             socket={socketRef.current}
             wave={gameStats.wave}
             onContinue={handleDockContinue}
+            onLoadoutChange={handleLoadoutChange}
           />
         );
 

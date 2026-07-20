@@ -10,12 +10,20 @@ export default function DockingStation({
   players,
   socket,
   wave,
-  onContinue
+  onContinue,
+  onLoadoutChange
 }) {
   const [selectedColor, setSelectedColor] = useState(shipColor);
   const [selectedSkills, setSelectedSkills] = useState(equippedSkills);
   const [ready, setReady] = useState(false);
   const [hoveredSkill, setHoveredSkill] = useState(null);
+
+  // Notify parent component of color/skills selection updates
+  useEffect(() => {
+    if (onLoadoutChange) {
+      onLoadoutChange(selectedColor, selectedSkills);
+    }
+  }, [selectedColor, selectedSkills, onLoadoutChange]);
 
   // Sync color & skills changes to multiplayer server
   useEffect(() => {
